@@ -1,0 +1,47 @@
+
+
+
+
+
+
+
+
+pdfcrop --margins '0 0 0 0' fig6-wwo_vs_mu.pdf fig6-wwo_vs_mu.pdf
+
+pdfcrop --margins '0 0 0 0' figX_fluid_is_faster.pdf figX_fluid_is_faster.pdf
+
+pdfcrop --margins '0 0 0 0' fig6-m_vs_t.pdf fig6-m_vs_t.pdf
+
+
+magick -density 600 fig2-snapshot_exp_sim.png fig2-snapshot_exp_sim.tif
+pdftops -eps fig3-surge.pdf
+pdftops -eps fig4_fluid_is_faster.pdf
+pdftops -eps                fig5-schematic_freefall.pdf
+pdftops -eps                fig6-m_vs_t.pdf
+pdftops -eps                fig7-m_vs_t-exp_sim.pdf
+
+##pdfcrop --margins '0 0 0 0' fig8-m_vs_t-exp_sim.pdf fig8-m_vs_t-exp_sim-crop.pdf
+pdftops -eps                fig8-m_vs_t-exp_sim.pdf
+
+
+pdfcrop --margins '0 0 0 0' fig9-w_vs_t.pdf fig9-w_vs_t-crop.pdf
+pdftops -eps                fig9-w_vs_t-crop.pdf fig9-w_vs_t.eps
+
+
+
+
+
+latexdiff --graphics-markup-level=0 ./original/submission_to_soft_matter.tex template_brand_Refresh.tex >> difference.tex 
+
+
+
+latexdiff --type=BOLD --encoding=latin9 -c ./tools/latexdiff.cfg ./original/submission_to_soft_matter.tex template_brand_Refresh.tex > difference.tex 
+
+
+latexdiff --type=BOLD --encoding=utf8 -c ./tools/latexdiff.cfg ./original/submission_to_soft_matter.tex new.tex >> difference.tex 
+
+
+latexdiff --graphics-markup-level=0 -c ./tools/latexdiff.cfg ./original/submission_to_soft_matter.tex revised.tex > difference.tex 
+
+
+
