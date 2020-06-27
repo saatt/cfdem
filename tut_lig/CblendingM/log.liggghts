@@ -1,0 +1,76 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2017-12-08-22:31:09 by hwb, git commit unknown)
+### Continuous Blending Mixer Simulation
+
+### This simulation involves inserting a stream of particles at one end of a continuous  ### blending mixer, conveying and mixing the material along the bed of the mixer, and then  ### discharging the material through a chute at the other end of the unit.
+
+
+### Initialization
+
+# Preliminaries
+units			si
+atom_style		sphere
+boundary		f f f
+newton			off
+communicate		single vel yes
+
+# Declare domain
+region			reg block -0.320 0.320 -1.960 1.460 -0.290 0.335 units box
+create_box		1 reg
+Created orthogonal box = (-0.32 -1.96 -0.29) to (0.32 1.46 0.335)
+  1 by 1 by 1 MPI processor grid
+
+
+## Setup
+
+# Material and interaction properties required
+fix				m1 all property/global youngsModulus peratomtype 2.5e7
+fix				m2 all property/global poissonsRatio peratomtype 0.25
+fix				m3 all property/global coefficientRestitution peratomtypepair 1 0.5
+fix				m4 all property/global coefficientFriction peratomtypepair 1 0.5
+fix				m5 all property/global coefficientRollingFriction peratomtypepair 1 0.1
+
+# Particle insertion
+region			factory block -0.225 0.225 -1.650 -1.450 0.3 0.33 units box
+fix				pts	all particletemplate/sphere 32452843 atom_type 1 density constant 1000 radius constant 0.005
+fix 			pdd all particledistribution/discrete 15485863 1 pts 1.0
+fix				ins all	insert/rate/region seed 15485867 distributiontemplate pdd nparticles 10000000 massrate 1.66666667 insert_every 1000 overlapcheck yes vel constant 0. 0. -1.0 region factory ntry_mc 10000
+
+# Import mesh from cad
+fix 			cad1 all mesh/surface file trough2.stl type 1 scale 0.001 curvature 1e-5
+fix 			cad2 all mesh/surface file left_shaft2.stl type 1 scale 0.001 curvature 1e-5
+fix 			cad3 all mesh/surface file right_shaft2.stl type 1 scale 0.001 curvature 1e-5
+
+# Use the imported mesh as granular wall
+fix			mixer all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 3 meshes cad1 cad2 cad3
+
+# Define the physics
+pair_style	gran model hertz tangential history rolling_friction cdt
+pair_coeff	* *
+
+
+### Detailed setting
+
+# Integrator
+fix 			integrate all nve/sphere
+
+# Gravity
+fix				grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Timestep
+timestep		0.00003125
+
+# Thermodynamic output settings
+thermo_style	custom step atoms ke cpu
+thermo		1600
+thermo_modify	lost ignore norm no
+
+# Rotate the shafts
+fix				movecad1 all move/mesh mesh cad2 rotate origin -0.1369 0. -0.0462 axis 0. 1. 0. period 1.5     # 40 RPM
+fix				movecad2 all move/mesh mesh cad3 rotate origin 0.1369 0. -0.0462 axis 0. 1. 0. period -1.5    # 40 RPM
+
+# Check time step and initialize dump file
+fix		ctg all check/timestep/gran 1 0.01 0.01
+run		1
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Thu Feb  6 05:35:17 2020
+
