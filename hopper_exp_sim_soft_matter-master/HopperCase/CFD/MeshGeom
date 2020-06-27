@@ -1,0 +1,6 @@
+#!/bin/sh
+
+blockMesh
+surfaceFeatureExtract
+snappyHexMesh -overwrite
+transformPoints -scale "(0.1 0.1 0.1)"
