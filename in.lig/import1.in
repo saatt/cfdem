@@ -1,0 +1,42 @@
+#### Adding particles using read_data add (and compress it)
+#-------------------------------------------------------------------------------
+# Short example of using the 'add' keywords of read_data.
+#-------------------------------------------------------------------------------
+# file : import1.in
+# date : 2016/02/22
+# type : liggghts 3.3.1 input script
+# auth : etienne.guesnet@simap.grenoble-inp.fr, robin.gibaud@simap.grenoble-inp.fr
+#-------------------------------------------------------------------------------
+####
+
+atom_style	granular
+atom_modify	map array
+newton		off
+communicate	single vel yes
+units		si
+boundary	f f f
+neighbor	0.01 bin
+neigh_modify	delay 0
+
+timestep	5e-2
+
+# Import ASCII coordinates file
+read_data import0.coord
+read_data import1.coord add
+
+# Define the interactions properties of material
+fix		myFric all property/global coefficientFriction peratomtypepair 1 0
+fix		myKn all property/global kn peratomtypepair 1 1e9	# normal rigidity
+fix		myKt all property/global kt peratomtypepair 1 0		# tangential rigidity
+fix		myCn all property/global gamman_abs peratomtypepair 1 0	# normal damping
+fix		myCt all property/global gammat_abs peratomtypepair 1 0	# tangential damping
+pair_style gran model hooke/stiffness absolute_damping on limitForce off tangential_damping on
+pair_coeff	* *
+
+fix		myIntegration all nve
+
+dump		dmp all custom 1 post/coord* id x y z radius vx vy vz fx fy fz
+dump_modify	dmp format          "%d %.16e %.16e %.16e %e %e %e %e %e %e %e"	# Choose precision of data
+
+# Run simulation
+run		50 upto

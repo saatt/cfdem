@@ -1,0 +1,50 @@
+#### Uniaxial compression.
+#-------------------------------------------------------------------------------
+# (1) Read sample from an external file.
+# (2) Compress at prescribed strain rate, with volume conservation.
+#-------------------------------------------------------------------------------
+# file : pack0.in
+# date : 2016/02/23
+# type : liggghts 3.3.1 input script
+# auth : etienne.guesnet@simap.grenoble-inp.fr, robin.gibaud@simap.grenoble-inp.fr
+#-------------------------------------------------------------------------------
+####
+
+### Genral settings
+atom_style	granular
+atom_modify	map array
+boundary	p p p
+newton		off
+communicate	single vel yes
+units		si
+neighbor	0.0001 bin
+neigh_modify	delay 0
+
+# Import ASCII coordinates file (1)
+read_data dense0.coord
+set group all density 1e18
+
+timestep	1e-4
+
+### Interaction model choice
+fix 		myCF all property/global coefficientFriction peratomtypepair 1 0
+fix		myKn all property/global kn peratomtypepair 1 1e8
+fix		myKt all property/global kt peratomtypepair 1 0
+fix		mGn all property/global gamman peratomtypepair 1 0
+fix		mGt all property/global gammat peratomtypepair 1 0
+pair_style gran model hooke/stiffness
+pair_coeff	* *
+
+fix		myInteg all nve
+
+#Deformation (2)
+fix		myComp all deform 1 x volume y volume z trate -1e-2 remap x
+
+# Output settings
+dump		myDmp all custom 10000 post/coord* id x y z radius vx vy vz fx fy fz
+dump_modify	myDmp format "%d   %.16e %.16e %.16e   %e   %e %e %e   %e %e %e   %e"
+thermo		10000
+thermo_style	custom step
+
+# Simulation
+run		300000 upto

@@ -1,0 +1,49 @@
+#### Almost minimal example of mesh import.
+#-------------------------------------------------------------------------------
+# file : wall0.in
+# date : 2016/02/23
+# type : liggghts 3.3.1 input script
+# auth : etienne.guesnet@simap.grenoble-inp.fr, robin.gibaud@simap.grenoble-inp.fr
+#-------------------------------------------------------------------------------
+####
+
+### General settings
+atom_style	granular
+atom_modify	map array
+boundary	p m p
+newton		off
+communicate	single vel yes
+units		si
+neighbor	0.0001 bin
+neigh_modify	delay 0
+
+# Import ASCII coordinates file
+read_data dense1.coord
+set		group all density 1e18
+
+timestep	1e-4
+
+### Interaction model choice
+fix 		myCF all property/global coefficientFriction peratomtypepair 1 0
+fix		myKn all property/global kn peratomtypepair 1 1e8
+fix		myKt all property/global kt peratomtypepair 1 0
+fix		myGn all property/global gamman peratomtypepair 1 0
+fix		myGt all property/global gammat peratomtypepair 1 0
+pair_style gran model hooke/stiffness
+pair_coeff	* *
+
+fix		myIntegration all nve
+
+### Moving wall
+fix	cad all mesh/surface file wall0.stl type 1					# Import mesh from external file
+fix	meshwalls all wall/gran model hooke/stiffness mesh n_meshes 1 meshes cad	# Define interaction laws
+fix	myMove all move/mesh mesh cad linear 0 1e-4 0					# Prescribed velocity
+
+### Output settings
+dump		dmp all custom 10000 post/coord* id x y z radius vx vy vz fx fy fz
+dump_modify	dmp format "%d   %.16e %.16e %.16e   %e   %e %e %e   %e %e %e   %e"
+thermo		10000
+thermo_style	custom step
+
+# Simulation
+run		300000 upto

@@ -1,0 +1,63 @@
+#### Gas to pack.
+#-------------------------------------------------------------------------------
+# (1) Generate a gas of particles using random insertion, with statistical
+#	distribution between two sizes.
+# (2) Densify the sample by isotropic shrinking of the domain.
+# (3) Relax the sample at constant volume.
+# (4) Write the final state in a text file, for further use of the sample.
+#-------------------------------------------------------------------------------
+# file : pack2.in
+# date : 2016/02/23
+# type : liggghts 3.3.1 input script
+# auth : etienne.guesnet@simap.grenoble-inp.fr, robin.gibaud@simap.grenoble-inp.fr
+#-------------------------------------------------------------------------------
+####
+
+### General settings
+atom_style	granular
+atom_modify	map array
+newton		off
+communicate	single vel yes
+units		si
+neighbor	0.0005 bin
+neigh_modify	delay 0
+timestep	1e-4
+
+### Domain definition
+boundary	p p p							#periodic boundary conditions
+region		myRegion block -0.05 0.05 -0.05 0.05 -0.05 0.05 units box
+create_box	1 myRegion
+
+
+### Interaction properties
+fix	 	myFric all property/global coefficientFriction peratomtypepair 1 0
+fix		myKn all property/global kn peratomtypepair 1 1e10
+fix		myKt all property/global kt peratomtypepair 1 0
+fix		myCn all property/global gamman_abs peratomtypepair 1 1e8
+fix		mCt all property/global gammat_abs peratomtypepair 1 0
+pair_style gran model hooke/stiffness absolute_damping on
+pair_coeff	* *
+
+### Random insertion of particles
+fix		myTemplate1 all particletemplate/sphere 1 atom_type 1 density constant 1e12 radius constant 0.005	#characteritics of the particles templates
+fix		myTemplate2 all particletemplate/sphere 1 atom_type 1 density constant 1e12 radius constant 0.006
+fix		myDistribution all particledistribution/discrete 1.  2 myTemplate1 0.3 myTemplate2 0.7			#statistical distribution between the two templates
+fix		myInsertion all insert/pack seed 23548 distributiontemplate myDistribution &
+	maxattempt 500 insert_every once &
+	region myRegion volumefraction_region 0.40	#define random insertion, particles will be inserted on the next time step
+run 1							#insert the particles before the first dump, otherwise it will be empty
+
+### Output settings
+dump		dmp all custom 10000 post/coord* id x y z radius vx vy vz fx fy fz
+dump_modify	dmp format "%d   %.16e %.16e %.16e   %e   %e %e %e   %e %e %e   %e"
+thermo		10000
+
+### Simulation
+fix		myIntegration all nve
+fix		myCompression all deform 1 x trate -5e-3 y trate -5e-3 z trate -5e-3	# define isotropic shrinking at prescribed strain rate
+run		300000									# shrinking
+unfix		myCompression								# stop the shrinking
+run		300000									# relaxation
+
+### Save the final state in the file post/pack.coord
+write_data	post/pack.coord

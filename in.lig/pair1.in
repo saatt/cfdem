@@ -1,0 +1,74 @@
+#### Verify hooke/stiffness normal
+#-------------------------------------------------------------------------------
+# Simulation:
+# (1) Create two indented particles.
+# (2) Model normal elastic repulsion (pair_style hooke/stiffness).
+# (3) Compute the theoretical interaction force: Fn = Kn * indentation.
+# (4) Compare with the forces computed by liggghts.
+#-------------------------------------------------------------------------------
+# file : pair1.in
+# date : 2016/02/19
+# type : liggghts 3.3.1 input script
+# auth : robin.gibaud@simap.grenoble-inp.fr
+#-------------------------------------------------------------------------------
+####
+
+### Simulation parameters
+variable	kn equal 1e15		# normal rigidity
+variable	diam equal 1		# particles diameter
+variable	timeStep equal 0.01	# time step
+variable	density equal 1e14	# particles density
+variable	nStep equal 10		# number of steps
+
+### General settings
+atom_style	granular
+atom_modify	map array
+boundary	p p p
+newton		off
+communicate	single vel yes
+units		si
+neighbor	$(v_diam/10) bin
+neigh_modify	delay 0
+timestep	${timeStep}
+
+### Domain and particles generation (1)
+region		myRegion block -2 2 -2 2 -2 2 units box
+create_box	1 myRegion
+create_atoms	1 single 0 0 .4
+create_atoms	1 single 0 0 -.4
+set		region myRegion diameter ${diam}
+set		region myRegion density ${density}
+
+### Interaction model choice (2)
+fix		myFric all property/global coefficientFriction peratomtypepair 1 0
+fix		myKn all property/global kn peratomtypepair 1 ${kn}
+fix		myKt all property/global kt peratomtypepair 1 0
+fix		myCn all property/global gamman_abs peratomtypepair 1 0
+fix		myCt all property/global gammat_abs peratomtypepair 1 0
+pair_style gran model hooke/stiffness absolute_damping on
+pair_coeff	* *
+
+### Z forces
+# Z force given by liggghts (3)
+variable	fz1 equal fz[1]				# fz[1] : z component of the forces acting on particle 1
+variable	fz2 equal fz[2]
+
+# Theoretical z force, computed from the position of the particles (4)
+variable	z1 equal z[1]				# z[1] : z coordinate of particle 1
+variable	z2 equal z[2]
+variable	distance equal v_z1-v_z2
+variable	indentation equal v_distance-v_diam
+variable	fTheory equal v_indentation*v_kn
+variable	error equal (v_fTheory-v_fz2)/v_fTheory	# relative error
+
+### Integration
+fix		myIntegration all nve
+
+### Output settings
+dump		myDump all custom 1 post/coord* id x y z radius vx vy vz fx fy fz
+thermo		1								# output every time step
+thermo_style	custom step v_distance v_indentation v_fTheory v_fz2 v_error	# choose data to output
+thermo_modify	format float %e							# set format to scientific notation
+
+### Run the simulation
+run		${nStep}
