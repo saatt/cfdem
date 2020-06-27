@@ -1,0 +1,90 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2017-12-08-22:31:09 by hwb, git commit unknown)
+### Bin Flow Simulation
+### This simulation involves inserting a set of particles into a cylindrical hopper,
+### allowing them to settle under gravity, and then suddenly opening a stopper at the
+### bottom of the hopper and allowing the particles to pour out.  We track the
+### flowrate of material from the hopper by tracking how many particles remain in the
+##
+# system as a function of time.
+
+
+
+### Initialization
+
+# Preliminaries
+atom_style	sphere
+atom_modify	map array
+boundary	f f f
+newton		off
+
+communicate	single vel yes
+
+units 		si
+#processors 	2 2 3
+
+# Declare domain
+region		domain block -0.138 0.138 -0.138 0.138 -0.0045 0.43 units box
+create_box	2 domain
+Created orthogonal box = (-0.138 -0.138 -0.0045) to (0.138 0.138 0.43)
+  1 by 1 by 1 MPI processor grid
+
+# Neighbor listing
+neighbor	0.003 bin
+neigh_modify	every 1 check no
+
+
+
+### Setup
+# Material and interaction properties required
+fix		m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix		m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix		m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.2 0.175 0.175 0.5
+
+#　Particle insertion
+fix		pts all particletemplate/sphere 32452843 atom_type 1 density constant 1000 radius constant 0.0015
+fix		pdd all particledistribution/discrete 15485863 1 pts 1.0
+region		factory cylinder z 0 0 0.10 0.4 0.41 units box
+fix		ins all insert/rate/region seed 15485867 distributiontemplate pdd nparticles 15000 particlerate 15000 insert_every 100 overlapcheck yes vel constant 0. 0. -1.0 region factory ntry_mc 10000
+
+# Import mesh from cad
+fix		cad1 all mesh/surface file hopper.stl type 2 scale 0.01
+
+#Use the imported mesh as granular wall
+fix		geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+# Create stopper for funnel
+fix		stopper all wall/gran model hertz tangential history primitive type 2 zplane 0.0
+
+# Define the physics
+pair_style	gran model hertz tangential history
+pair_coeff	* *
+
+
+
+### Detailed settings
+# Integrator
+fix		integrate all nve/sphere
+
+# Gravity
+fix		grav all gravity 9.81 vector 0.0 0.0 -1.0
+# Time step
+timestep	0.00001
+
+#Thermodynamic output settings
+thermo_style	custom step atoms ke cpu
+thermo		1000
+thermo_modify	lost ignore norm no
+
+# Check time step and initialize dump file
+fix 		ctg all check/timestep/gran 1 0.01 0.01
+run		1
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Thu Feb  6 23:58:43 2020
+
+ERROR: Mesh (id cad1): All 328 mesh elements have been lost / left the domain. 
+Please use 'boundary m m m' or scale/translate/rotate the mesh or change its dynamics
+FYI: center of mass of mesh including scale/tranlate/rotate is 0.000073 / -0.000000 / 2.000000
+     simulation box x from -0.138000 to 0.138000 y  from -0.138000 to 0.138000 z from -0.004500 to 0.430000
+     (gives indication about changes in scale/tranlate/rotate necessary to make simulation run)
+ (../multi_node_mesh_parallel_I.h:605)

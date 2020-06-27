@@ -1,0 +1,96 @@
+### Bin Flow Simulation
+### This simulation involves inserting a set of particles into a cylindrical hopper, 
+### allowing them to settle under gravity, and then suddenly opening a stopper at the 
+### bottom of the hopper and allowing the particles to pour out.  We track the 
+### flowrate of material from the hopper by tracking how many particles remain in the 
+##
+# system as a function of time.
+
+
+
+### Initialization
+
+# Preliminaries
+atom_style	sphere
+atom_modify	map array
+boundary	f f f
+newton		off
+
+communicate	single vel yes
+
+units 		si
+#processors 	2 2 3
+
+# Declare domain
+region		domain block -0.138 0.138 -0.138 0.138 -0.0045 0.43 units box
+create_box	2 domain
+
+# Neighbor listing
+neighbor	0.003 bin
+neigh_modify	every 1 check no 
+
+
+
+### Setup
+# Material and interaction properties required
+fix		m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix		m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix		m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.2 0.175 0.175 0.5
+
+#　Particle insertion
+fix		pts all particletemplate/sphere 32452843 atom_type 1 density constant 1000 radius constant 0.0015
+fix		pdd all particledistribution/discrete 15485863 1 pts 1.0
+region		factory cylinder z 0 0 0.10 0.4 0.41 units box
+fix		ins all insert/rate/region seed 15485867 distributiontemplate pdd nparticles 15000 particlerate 15000 insert_every 100 overlapcheck yes vel constant 0. 0. -1.0 region factory ntry_mc 10000
+
+# Import mesh from cad
+fix		cad1 all mesh/surface file hopper.stl type 2 scale 0.001
+
+#Use the imported mesh as granular wall
+fix		geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+# Create stopper for funnel
+fix		stopper all wall/gran model hertz tangential history primitive type 2 zplane 0.0
+
+# Define the physics
+pair_style	gran model hertz tangential history
+pair_coeff	* *
+	
+
+
+### Detailed settings
+# Integrator
+fix		integrate all nve/sphere
+
+# Gravity
+fix		grav all gravity 9.81 vector 0.0 0.0 -1.0
+# Time step
+timestep	0.00001
+
+#Thermodynamic output settings
+thermo_style	custom step atoms ke cpu
+thermo		1000
+thermo_modify	lost ignore norm no
+
+# Check time step and initialize dump file
+fix 		ctg all check/timestep/gran 1 0.01 0.01
+run		1
+unfix		ctg
+
+# Create imaging information
+#dump		dumpstl all stl 200 dump*.stl
+# dump		dmp all custom 200 dump.1 id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump		dmp all custom/vtk 200 post/binflow_*.vtk id type type x  y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+
+### Execution and further settings
+
+# Fill the hopper
+run 		15000 upto
+
+# Pull the stopper
+unfix		stopper
+
+run		30000
+
