@@ -1,0 +1,78 @@
+### 1-way flow coupling
+### This simulation involves inserting particles into slot across a horizontal air
+### stream that applies a force to the particles and pushes them sideways, creating
+### a pile-up at the far end of the slot. The focus here is on the use of the applied
+### body force to act as a weak 1-way coupled flow field. While not a general substitute
+### for the full 2-way coupling, it is useful in some circumstances.
+
+
+### Initialization
+
+units			si
+atom_style		sphere
+boundary		f f f
+newton			off
+communicate		single vel yes
+
+# Declare domain
+region			reg block -0.155 0.155 -0.015 0.015 -0.005 0.235 units box
+create_box		2 reg
+
+
+###Setup
+# Material and interaction properties
+fix			m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix 			m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix 			m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix			m4 all property/global coefficientFriction peratomtypepair 2 0.5 0.5 0.5 0.5
+
+# Particle insertion
+fix 		pts all particletemplate/sphere 32452843 atom_type 1 density constant 1000 radius constant 0.002
+fix		pdd all particledistribution/discrete 15485863 1 pts 1.0
+region		factory block -0.14 -0.10 -0.006 0.006 0.215 0.225 units box
+fix		ins all insert/rate/region seed 15485867 distributiontemplate pdd nparticles 10000 particlerate 10000 insert_every 500 overlapcheck yes vel constant 0. 0. -2.0 region factory ntry_mc 10000
+
+# Geometry
+fix				wall1 all wall/gran model hertz tangential history primitive type 1 zplane 0.0
+fix				wall2 all wall/gran model hertz tangential history primitive type 1 xplane -0.15
+fix				wall3 all wall/gran model hertz tangential history primitive type 1 xplane 0.15
+fix				wall4 all wall/gran model hertz tangential history primitive type 1 yplane -0.01
+fix				wall5 all wall/gran model hertz tangential history primitive type 1 yplane 0.01
+
+# Applied flow field
+region			spray block -0.15 -0.05 -0.01 0.01 0.1 0.2 units box
+fix				push all addforce 0.01 0.0 0.0 region spray
+
+
+# Define the physics
+pair_style	gran model hertz tangential history
+pair_coeff	* *
+
+## Detailed settings
+# Integrator
+fix		integrate all nve/sphere
+#Gravity
+fix		grav all gravity 9.81 vector 0.0 0.0 -1.0
+# Timestep
+timestep	0.00001
+
+# Thermo settings
+thermo_style	custom step atoms ke cpu
+thermo		10000
+thermo_modify 	lost ignore norm no
+compute_modify	thermo_temp dynamic yes
+
+# Run 1 step to check timestep and initialize
+fix		ctg all check/timestep/gran 1 0.01 0.01
+run		1
+unfix		ctg
+
+# Dump particle position
+dump		dmp all custom/vtk 2000 post/WayFC_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+
+
+### Execution and further settings
+
+# Run remainder
+run 			200000 upto
