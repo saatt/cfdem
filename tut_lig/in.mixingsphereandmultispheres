@@ -1,0 +1,71 @@
+
+## mixing sphere and multispheres
+atom_style granular
+atom_modify map array
+boundary f f f
+newton off
+
+communicate single vel yes
+
+units micro
+
+region reg block -0.0255e6 0.0255e6 -0.0105e6 0.0105e6 -0.001e6 0.0200e6 units box
+create_box 3 reg
+
+neighbor 10 bin
+neigh_modify delay 0
+
+fix m1 all property/global youngsModulus peratomtype 5.e3 5.e3 5.e3
+fix m2 all property/global poissonsRatio peratomtype 0.45 0.45 0.45
+fix m3 all property/global coefficientRestitution peratomtypepair 3 0.3 0.3 0.3 0.3 0.3 0.3 0.3 0.3 0.3
+fix m4 all property/global coefficientFriction peratomtypepair 3 0.4 0.4 0.4 0.4 0.4 0.4 0.4 0.4 0.4
+fix m5 all property/global coefficientRollingFriction peratomtypepair 3 0.15 0.15 0.15 0.15 0.15 0.15 0.15 0.15 0.15
+
+pair_style gran model hertz tangential history rolling_friction cdt
+pair_coeff * *
+
+timestep 0.03
+
+fix gravi all gravity 9.81e-6 vector 0.0 0.0 -1.0
+
+fix cv all mesh/surface file meshes/Box.stl type 1 scale 1000
+fix rc all mesh/surface file meshes/Recoater.stl type 1 scale 1000
+fix bx all mesh/surface file meshes/Building_Piston.stl type 1 scale 1000
+fix ax all mesh/surface file meshes/Powder_Piston.stl type 1 scale 1000
+fix inface all mesh/surface file meshes/Inlet.stl type 1 scale 1000
+fix wall all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes cv rc bx ax
+
+###### mixing sphere and multispheres ########
+group multispheres initialize
+group spheres initialize
+fix intSpheres spheres nve/sphere
+fix intMulti multispheres multisphere
+##############################################
+
+fix pts1 multispheres particletemplate/multisphere 32452843 atom_type 1 density constant 8540e-3 nspheres 3 ntry 1000000 spheres file data/MultiSphere0 scale 1 type 1
+fix pts2 multispheres particletemplate/multisphere 32452867 atom_type 2 density constant 8540e-3 nspheres 2 ntry 1000000 spheres file data/MultiSphere1 scale 1 type 2
+fix pts3 spheres particletemplate/sphere 32452883 atom_type 3 density constant 8540e-3 radius constant 10
+
+fix pdd1 all particledistribution/discrete 15485867. 3 pts1 0.33 pts2 0.33 pts3 0.33
+
+region bc block 0.005e3 0.019e3 -0.009e3 0.009e3 -0.0002e3 0.002e3 units box
+
+fix ins all insert/stream seed 15485863 distributiontemplate pdd1 &
+maxattempt 100 mass 0.0001e12 massrate 50e5 overlapcheck yes vel constant 0. 0. -0.05 &
+insertion_face inface extrude_length 0.0015e5
+
+fix ts all check/timestep/gran 10000 0.1 0.1
+compute rke all erotate/sphere
+thermo_style custom step atoms ke c_rke f_ts[1] f_ts[2] vol
+thermo 100000
+thermo_modify lost ignore norm no
+compute_modify thermo_temp dynamic yes
+
+run 1
+dump dmp all custom 100000 post/dump*.conveyor id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+dump dmp_geom_ax all mesh/stl 100000 post/dump_geom_ax*.stl ax
+dump dmp_geom_bx all mesh/stl 100000 post/dump_geom_bx*.stl bx
+dump dmp_geom_rc all mesh/stl 100000 post/dump_geom_rc*.stl rc
+
+run 1000000 upto
