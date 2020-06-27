@@ -1,0 +1,449 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2017-12-08-22:31:09 by hwb, git commit unknown)
+#Multisphere
+
+atom_style	sphere
+atom_modify	map array sort 0 0
+boundary	f f f
+#boundary	m m m
+
+newton		off
+
+communicate	single vel yes
+
+#PUBLIC version only supports serial execution
+#processors	1 1 1
+
+units		si
+
+region		reg block -0.5 0.1 -0.2 0.2 -0.4 0.15 units box
+#region		reg block -0.3 0.3 -0.3 0.3 0. 0.5 units box
+
+create_box	1 reg
+Created orthogonal box = (-0.5 -0.2 -0.4) to (0.1 0.2 0.15)
+  1 by 1 by 1 MPI processor grid
+
+neighbor	0.004 bin
+neigh_modify	delay 0
+
+#Material properties required for new pair styles
+
+fix 		m1 all property/global youngsModulus peratomtype 1.e7
+fix 		m2 all property/global poissonsRatio peratomtype 0.45
+fix 		m3 all property/global coefficientRestitution peratomtypepair 1 0.3
+fix 		m4 all property/global coefficientFriction peratomtypepair 1 0.5
+fix 		m5 all property/global characteristicVelocity scalar 2.
+
+#New pair style
+pair_style gran model hertz tangential history #Hertzian without cohesion
+pair_coeff	* *
+
+timestep	0.00001
+
+fix		gravi all gravity 9.81 vector 0.0 0.0 -1.0
+
+fix             zwalls all wall/gran model hertz tangential history primitive type 1 zplane -0.40
+#fix             xwalls all wall/gran model hertz tangential history primitive type 1 xplane -0.35
+
+#the chute
+fix  cad all mesh/surface/stress file meshes/simple_chute.stl type 1 #wear finnie
+fix  granwalls all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad
+fix  inface all mesh/surface file meshes/insertion_face.stl type 1
+
+
+#distributions for insertion
+fix		pts1 all particletemplate/multisphere 15485863 atom_type 1 density constant 2500 nspheres 3 ntry 10000 spheres file data/stone1.multisphere scale 0.001 type 1
+WARNING: fix particletemplate/multisphere: ntry is very low (../fix_template_multiplespheres.cpp:229)
+Finished calculating properties of template
+   mass = 2.475578e-05, radius of bounding sphere = 2.013975e-03, radius of equivalent sphere = 1.332138e-03
+   center of mass = 0.000000e+00, 0.000000e+00, 0.000000e+00
+   center of bounding sphere in body coords = -6.060007e-06, 1.017666e-05, 6.890667e-09
+   Principal moments of inertia_: 1.088699e-11, 3.073162e-11, 3.059525e-11
+     Eigenvector: 9.999735e-01, -7.048901e-03, 1.800101e-03
+     Eigenvector: 6.816634e-03, 9.942691e-01, 1.066889e-01
+     Eigenvector: -2.541824e-03, -1.066738e-01, 9.942908e-01
+     Inertia tensor: 1.088804e-11, 1.398422e-13, -3.537675e-14
+     Inertia tensor: 1.398422e-13, 3.072908e-11, 1.471563e-14
+     Inertia tensor: -3.537675e-14, 1.471563e-14, 3.059674e-11
+fix		pdd1 all particledistribution/discrete 15485867 1 pts1 1.0
+
+#region and insertion
+group  nve_group region reg
+0 atoms in group nve_group
+region          bc cylinder z 0.0 0.0 0.02 0.10 0.15 units box
+#region		bc cylinder z 0.0 0.0 0.25 0.40 0.50 units box
+
+
+fix    ins nve_group insert/stream seed 32452867 distributiontemplate pdd1        nparticles 2000 massrate 0.01 insert_every 2000 overlapcheck yes all_in no vel constant 0.0 0.0 -2.5        insertion_face inface
+
+#integrator for multisphere rigid bodies
+fix		integr all multisphere
+
+#output settings, include total thermal energy
+compute		1 all erotate/sphere
+fix		ts all check/timestep/gran 1000 0.1 0.1
+thermo_style	custom step atoms ke c_1 f_ts[1] f_ts[2] vol
+thermo		1000
+thermo_modify	lost ignore norm no
+
+run 1
+Setting up run at Tue Feb 11 04:25:02 2020
+
+WARNING: Energy calculated for multisphere particles is currently not correct (../fix_multisphere.cpp:1312)
+INFO: Particle insertion ins: 8.078921 particles every 2000 steps - particle rate 403.946057, (mass rate 1.000000e-02)
+      2000 particles (mass 4.951156e-02) within 494000 steps
+Memory usage per processor = 27.9655 Mbytes
+    Step    Atoms         KinEng              1          ts[1]          ts[2]         Volume 
+       0        0              0              0              0              0          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 1
+ - a total of 9 particle templates (mass 2.228020e-04) inserted so far.
+       1       27  0.00069625633              0              0              0          0.132 
+Loop time of 0.013031 on 1 procs for 1 steps with 27 atoms, finish time Tue Feb 11 04:25:02 2020
+
+
+Pair  time (%) = 1.4782e-05 (0.113437)
+Neigh time (%) = 0.00260305 (19.9758)
+Comm  time (%) = 3.8147e-06 (0.029274)
+Outpt time (%) = 8.29697e-05 (0.63671)
+Other time (%) = 0.0103264 (79.2447)
+
+Nlocal:    27 ave 27 max 27 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    10 ave 10 max 10 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 10
+Ave neighs/atom = 0.37037
+Neighbor list builds = 1
+Dangerous builds = 0
+
+#insert the first particles so that dump is not empty
+dump		dmp all custom/vtk 200 post/multi_*.vtk id type mol x y z vx vy vz fx fy fz omegax omegay omegaz radius
+
+#insert particles
+run		100000 upto
+Setting up run at Tue Feb 11 04:25:02 2020
+
+WARNING: Energy calculated for multisphere particles is currently not correct (../fix_multisphere.cpp:1312)
+Memory usage per processor = 33.0049 Mbytes
+    Step    Atoms         KinEng              1          ts[1]          ts[2]         Volume 
+       1       27  0.00069625633              0              0              0          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    1000       27  0.00072186026              0     0.11230587    0.054396636          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    2000       27  0.00077210413              0     0.11230587    0.054803017          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 2001
+ - a total of 17 particle templates (mass 4.208483e-04) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    3000       51   0.0014603327              0     0.11230587    0.055197691          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    4000       51   0.0015506842              0     0.11230587    0.055581388          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 4001
+ - a total of 25 particle templates (mass 6.188945e-04) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    5000       75   0.0022973087              0     0.11230587    0.055954775          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    6000       75   0.0022546543              0     0.11230587    0.056318453          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 6001
+ - a total of 33 particle templates (mass 8.169408e-04) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    7000       99   0.0025071848              0     0.11230587    0.056229858          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    8000       99   0.0023468817              0     0.11230587    0.056200563          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 8001
+ - a total of 41 particle templates (mass 1.014987e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+    9000      123   0.0029053414              0     0.11230587    0.056176286          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   10000      123   0.0025377899              0     0.11230587    0.056214676          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 10001
+ - a total of 50 particle templates (mass 1.237789e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   11000      150   0.0027645753              0     0.11230587    0.056282866          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   12000      150    0.002677442              0     0.11230587    0.056205269          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 12001
+ - a total of 58 particle templates (mass 1.435835e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   13000      174    0.003134575              0     0.11230587    0.056304444          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   14000      174   0.0027742137              0     0.11230587    0.056230219          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 14001
+ - a total of 67 particle templates (mass 1.658637e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   15000      201   0.0032830007              0     0.11230587    0.056133063          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   16000      201   0.0030305576              0     0.11230587    0.056083867          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 16001
+ - a total of 76 particle templates (mass 1.881439e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   17000      228   0.0036510263              0     0.11230587    0.056358605          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   18000      228   0.0030972057              0     0.11230587    0.056223353          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 18001
+ - a total of 84 particle templates (mass 2.079486e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   19000      252   0.0032721464              0     0.11230587    0.056256206          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   20000      252   0.0031393494              0     0.11230587    0.056120325          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 20001
+ - a total of 92 particle templates (mass 2.277532e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   21000      276    0.003559676              0     0.11230587    0.056344994          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   22000      276   0.0034137756              0     0.11230587    0.056276386          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 22001
+ - a total of 100 particle templates (mass 2.475578e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   23000      300   0.0035468556              0     0.11230587    0.056088612          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   24000      300    0.003323139              0     0.11230587    0.056088247          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 24001
+ - a total of 108 particle templates (mass 2.673624e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   25000      324   0.0036098503              0     0.11230587    0.056166854          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   26000      324     0.00342762              0     0.11230587    0.056312348          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 26001
+ - a total of 116 particle templates (mass 2.871671e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   27000      348   0.0036970974              0     0.11230587    0.056268822          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   28000      348   0.0035189056              0     0.11230587    0.056242136          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 28001
+ - a total of 124 particle templates (mass 3.069717e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   29000      372   0.0038615521              0     0.11230587    0.056095909          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   30000      372   0.0037394992              0     0.11230587    0.056278186          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 30001
+ - a total of 133 particle templates (mass 3.292519e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   31000      399   0.0043359668              0     0.11230587    0.056377212          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   32000      399   0.0039174928              0     0.11230587    0.056232025          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 32001
+ - a total of 142 particle templates (mass 3.515321e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   33000      426   0.0045072706              0     0.11230587    0.056771241          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   34000      426   0.0042102175              0     0.11230587    0.056161772          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 34001
+ - a total of 150 particle templates (mass 3.713367e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   35000      450   0.0042535437              0     0.11230587    0.056315221          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   36000      450   0.0042337391              0     0.11230587    0.056281066          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 36001
+ - a total of 158 particle templates (mass 3.911413e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   37000      474   0.0046917363              0     0.11230587    0.056326708          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   38000      474   0.0043493893              0     0.11230587    0.056197667          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 38001
+ - a total of 166 particle templates (mass 4.109460e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   39000      498   0.0047015316              0     0.11230587    0.056067796          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   40000      498   0.0043721717              0     0.11230587    0.056209973          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 40001
+ - a total of 175 particle templates (mass 4.332262e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   41000      525    0.004760528              0     0.11230587    0.056191147          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   42000      525   0.0043035815              0     0.11230587    0.056151604          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 42001
+ - a total of 183 particle templates (mass 4.530308e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   43000      549   0.0047527846              0     0.11230587    0.056134882          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   44000      549   0.0045840213              0     0.11230587    0.056298693          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 44001
+ - a total of 191 particle templates (mass 4.728354e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   45000      573   0.0049970905              0     0.11230587    0.056216846          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   46000      573   0.0045367818              0     0.11230587    0.056088977          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 46001
+ - a total of 199 particle templates (mass 4.926400e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   47000      597   0.0049938005              0     0.11230587    0.056327066          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   48000      597   0.0047351331              0     0.11230587    0.056133427          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 48001
+ - a total of 207 particle templates (mass 5.124447e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   49000      621   0.0054457409              0     0.11230587    0.056190423          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   50000      615    0.005079395              0     0.11230587    0.056192959          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 50001
+ - a total of 216 particle templates (mass 5.347249e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   51000      642   0.0056387288              0     0.11230587    0.056173022          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   52000      642    0.005448308              0     0.11230587    0.056252239          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 52001
+ - a total of 224 particle templates (mass 5.545295e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   53000      666   0.0055283643              0     0.11230587    0.056057924          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   54000      657   0.0054958728              0     0.11230587    0.056246827          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 54001
+ - a total of 233 particle templates (mass 5.768097e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   55000      681   0.0059295813              0     0.11230587    0.056096638          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   56000      678   0.0056051105              0     0.11230587    0.056199839          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 56001
+ - a total of 241 particle templates (mass 5.966143e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   57000      699   0.0058660193              0     0.11230587    0.056105753          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   58000      699   0.0059219982              0     0.11230587     0.05633424          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 58001
+ - a total of 249 particle templates (mass 6.164189e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   59000      717   0.0062697288              0     0.11230587    0.056234192          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   60000      717   0.0059072839              0     0.11230587     0.05647221          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 60001
+ - a total of 257 particle templates (mass 6.362236e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   61000      738   0.0060104934              0     0.11230587    0.056129425          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   62000      738   0.0058653396              0     0.11230587    0.056214676          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 62001
+ - a total of 265 particle templates (mass 6.560282e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   63000      762   0.0065158153              0     0.11230587     0.05622263          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   64000      762   0.0059513634              0     0.11230587     0.05626702          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 64001
+ - a total of 273 particle templates (mass 6.758328e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   65000      771   0.0059883308              0     0.11230587    0.056154873          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   66000      768   0.0055560628              0     0.11230587    0.056454559          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 66001
+ - a total of 281 particle templates (mass 6.956374e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   67000      786   0.0059421195              0     0.11230587    0.056216846          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   68000      780   0.0058209983              0     0.11230587    0.056329936          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 68001
+ - a total of 289 particle templates (mass 7.154421e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   69000      801   0.0059603385              0     0.11230587     0.05611377          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   70000      786   0.0057898837              0     0.11230587    0.056241053          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 70001
+ - a total of 297 particle templates (mass 7.352467e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   71000      810   0.0057365346              0     0.11230587     0.05611377          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   72000      801   0.0056257167              0     0.11230587    0.056325272          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 72001
+ - a total of 305 particle templates (mass 7.550513e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   73000      813   0.0057703787              0     0.11230587    0.056259812          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   74000      813   0.0057276375              0     0.11230587    0.056234553          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 74001
+ - a total of 313 particle templates (mass 7.748559e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   75000      837   0.0059870833              0     0.11230587    0.056287184          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   76000      831   0.0055663774              0     0.11230587     0.05626666          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 76001
+ - a total of 321 particle templates (mass 7.946606e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   77000      849   0.0056765543              0     0.11230587    0.056305163          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   78000      840   0.0052973313              0     0.11230587     0.05630696          0.132 
+INFO: Particle insertion ins: inserted 9 particle templates (mass 2.228020e-04) at step 78001
+ - a total of 330 particle templates (mass 8.169408e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   79000      858   0.0056079047              0     0.11230587    0.056265939          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   80000      858   0.0054796424              0     0.11230587    0.056007729          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 80001
+ - a total of 338 particle templates (mass 8.367454e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   81000      873   0.0060492564              0     0.11230587    0.056340694          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   82000      861   0.0056099649              0     0.11230587    0.056138519          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 82001
+ - a total of 346 particle templates (mass 8.565500e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   83000      879   0.0058606438              0     0.11230587    0.056230203          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   84000      873   0.0057216883              0     0.11230587    0.056163224          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 84001
+ - a total of 354 particle templates (mass 8.763546e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   85000      888   0.0061661266              0     0.11230587    0.056261975          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   86000      885   0.0060288843              0     0.11230587    0.056342486          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 86001
+ - a total of 362 particle templates (mass 8.961593e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   87000      897   0.0060792792              0     0.11230587    0.056193683          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   88000      891   0.0057156575              0     0.11230587    0.056166854          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 88001
+ - a total of 370 particle templates (mass 9.159639e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   89000      915   0.0060473125              0     0.11230587    0.056333523          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   90000      900   0.0057154764              0     0.11230587     0.05617955          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 90001
+ - a total of 378 particle templates (mass 9.357685e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   91000      915   0.0059377733              0     0.11230587    0.056122874          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   92000      900   0.0055836709              0     0.11230587    0.056073277          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 92001
+ - a total of 386 particle templates (mass 9.555731e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   93000      915   0.0060065468              0     0.11230587    0.056304444          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   94000      906   0.0056196437              0     0.11230587    0.056070719          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 94001
+ - a total of 394 particle templates (mass 9.753778e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   95000      927   0.0058866208              0     0.11230587    0.056215037          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   96000      924   0.0057028923              0     0.11230587    0.056279266          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 96001
+ - a total of 402 particle templates (mass 9.951824e-03) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   97000      933    0.005954851              0     0.11230587    0.056232386          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   98000      930   0.0057062073              0     0.11230587    0.056257649          0.132 
+INFO: Particle insertion ins: inserted 8 particle templates (mass 1.980462e-04) at step 98001
+ - a total of 410 particle templates (mass 1.014987e-02) inserted so far.
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+   99000      945   0.0055867562              0     0.11230587    0.056205631          0.132 
+WARNING: time-step is 11.230587 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+  100000      942   0.0056241801              0     0.11230587    0.056158142          0.132 
+Loop time of 23.984 on 1 procs for 99999 steps with 942 atoms, finish time Tue Feb 11 04:25:26 2020
+
+
+Pair  time (%) = 0.602694 (2.51291)
+Neigh time (%) = 4.95763 (20.6706)
+Comm  time (%) = 0.0147474 (0.0614885)
+Outpt time (%) = 1.37741 (5.74303)
+Other time (%) = 17.0315 (71.012)
+
+Nlocal:    942 ave 942 max 942 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    271 ave 271 max 271 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 271
+Ave neighs/atom = 0.287686
+Neighbor list builds = 1607
+Dangerous builds = 0
