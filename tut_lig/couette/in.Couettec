@@ -1,0 +1,90 @@
+### Couette cylinder simulation 
+ 
+### This simulation first inserts a set of particles into the Couette cylinder and allows them to settle.  Then the interior cylinder is set to rotate at a constant rate and the  ### bottom of the hopper is opened to allow material to flow in the vertical direction.  A ### periodic boundary is used in the z-direction to reinsert the flow of material and  
+### maintain a constant mass of material in the apparatus.
+
+### Initialization
+
+# Preliminaries
+units			si
+atom_style		sphere
+boundary		f f p
+newton			off
+communicate 		single vel yes
+
+# Declare domain
+region			reg block -0.078 0.078 -0.078 0.078 -0.1524 0.306 units box
+create_box 		2 reg
+
+
+### Setup
+
+# Material properties and interations
+fix			m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix			m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix			m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix			m4 all property/global coefficientFriction peratomtypepair 2 0.5 0.5 0.5 0.5
+fix			m5 all property/global coefficientRollingFriction peratomtypepair 2 0.1 0.1 0.1 0.1
+
+# Particle insertion
+fix 			pts1 all particletemplate/sphere 15485863 atom_type 1 density constant 1000 radius constant 0.00125
+fix			pts2 all particletemplate/sphere 15485867 atom_type 2 density constant 1000 radius constant 0.00100
+fix			pdd all particledistribution/discrete 32452843 2 pts1 0.5 pts2 0.5
+fix 			ins_mesh all mesh/surface file factory.stl type 1 scale 0.001
+fix			ins all insert/stream seed 32452867 distributiontemplate pdd nparticles 45000 particlerate 90000 overlapcheck yes vel constant 0. 0. -3.0 insertion_face ins_mesh extrude_length 0.02
+
+# Import mesh from cad
+fix			cad1 all mesh/surface file outer_cylinder.stl type 1 scale 0.001 curvature 1e-5
+fix			cad2 all mesh/surface file inner_cylinder.stl type 1 scale 0.001 curvature 1e-5
+fix			cad3 all mesh/surface file funnel.stl type 1 scale 0.001 curvature 1e-5
+fix 			cad4 all mesh/surface file plate.stl type 1 scale 0.001 curvature 1e-5
+
+# Use the imported mesh as granular wall
+fix			geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes cad1 cad2 cad3 cad4 
+
+# Define the physics
+pair_style 		gran model hertz tangential history rolling_friction cdt
+pair_coeff		* *
+
+
+### Detailed settings
+
+# Integrator
+fix			integrate all nve/sphere	
+
+#Graviy
+fix			grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Timestep
+timestep 		0.00000625
+
+# Thermodynamic output settings
+thermo_style	custom step atoms ke cpu
+thermo 			800
+thermo_modify	lost ignore norm no
+
+# Check timestep
+fix			timecheck all check/timestep/gran 1 0.01 0.01
+run 			1 
+unfix 			timecheck
+
+# Dump output
+#dump			dmp all custom 16000 dump.1 id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegez radius
+#dump			dumpstl all stl 16000 dump*.stl
+#dump			dump2 all custom 16000 dump.txt type x y z radius
+dump			dmp all custom/vtk 2000 post/couettec_*.vtk id type type x  y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+
+### Execution and further settings
+
+# Run 1.0 sec to insert and settle particles
+run 			160000 upto
+
+# Remove the stopper and start the rotation
+unfix 			geometry
+fix			geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes cad1 cad2 cad3 cad4 
+fix			movecad all move/mesh mesh cad4 rotate origin 0. 0. 0. axis 0. 0. 1. period 1.
+
+# Run 30 sec
+run 			480000
+ 

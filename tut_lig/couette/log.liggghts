@@ -1,0 +1,1128 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2017-12-08-22:31:09 by hwb, git commit unknown)
+### Couette cylinder simulation
+
+### This simulation first inserts a set of particles into the Couette cylinder and allows them to settle.  Then the interior cylinder is set to rotate at a constant rate and the  ### bottom of the hopper is opened to allow material to flow in the vertical direction.  A ### periodic boundary is used in the z-direction to reinsert the flow of material and
+### maintain a constant mass of material in the apparatus.
+
+### Initialization
+
+# Preliminaries
+units			si
+atom_style		sphere
+boundary		f f p
+newton			off
+communicate 		single vel yes
+
+# Declare domain
+region			reg block -0.078 0.078 -0.078 0.078 -0.1524 0.306 units box
+create_box 		2 reg
+Created orthogonal box = (-0.078 -0.078 -0.1524) to (0.078 0.078 0.306)
+  1 by 1 by 1 MPI processor grid
+
+
+### Setup
+
+# Material properties and interations
+fix			m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix			m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix			m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix			m4 all property/global coefficientFriction peratomtypepair 2 0.5 0.5 0.5 0.5
+fix			m5 all property/global coefficientRollingFriction peratomtypepair 2 0.1 0.1 0.1 0.1
+
+# Particle insertion
+fix 			pts1 all particletemplate/sphere 15485863 atom_type 1 density constant 1000 radius constant 0.00125
+fix			pts2 all particletemplate/sphere 15485867 atom_type 2 density constant 1000 radius constant 0.00100
+fix			pdd all particledistribution/discrete 32452843 2 pts1 0.5 pts2 0.5
+fix 			ins_mesh all mesh/surface file factory.stl type 1 scale 0.001
+fix			ins all insert/stream seed 32452867 distributiontemplate pdd nparticles 45000 particlerate 90000 overlapcheck yes vel constant 0. 0. -3.0 insertion_face ins_mesh extrude_length 0.02
+
+# Import mesh from cad
+fix			cad1 all mesh/surface file outer_cylinder.stl type 1 scale 0.001 curvature 1e-5
+fix			cad2 all mesh/surface file inner_cylinder.stl type 1 scale 0.001 curvature 1e-5
+fix			cad3 all mesh/surface file funnel.stl type 1 scale 0.001 curvature 1e-5
+fix 			cad4 all mesh/surface file plate.stl type 1 scale 0.001 curvature 1e-5
+
+# Use the imported mesh as granular wall
+fix			geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes cad1 cad2 cad3 cad4
+
+# Define the physics
+pair_style 		gran model hertz tangential history rolling_friction cdt
+pair_coeff		* *
+
+
+### Detailed settings
+
+# Integrator
+fix			integrate all nve/sphere
+
+#Graviy
+fix			grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Timestep
+timestep 		0.00000625
+
+# Thermodynamic output settings
+thermo_style	custom step atoms ke cpu
+thermo 			800
+thermo_modify	lost ignore norm no
+
+# Check timestep
+fix			timecheck all check/timestep/gran 1 0.01 0.01
+run 			1
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Feb  8 00:10:13 2020
+
+INFO: Particle insertion ins: 599.625000 particles every 1066 steps - particle rate 90000.000000, (mass rate 4.986655e-01)
+      45000 particles (mass 2.493328e-01) within 79950 steps
+Memory usage per processor = 23.3382 Mbytes
+    Step    Atoms         KinEng            CPU 
+       0        0              0              0 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 1
+ - a total of 600 particle templates (mass 3.323740e-03) inserted so far.
+WARNING: time-step is 18.250596 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+WARNING: time-step is 6.832229 % of hertz time (../fix_check_timestep_gran.cpp:208)
+       1      600    0.014956828    0.027425051 
+Loop time of 0.0274272 on 1 procs for 1 steps with 600 atoms, finish time Sat Feb  8 00:10:13 2020
+
+
+Pair  time (%) = 2.00272e-05 (0.0730194)
+Neigh time (%) = 0.00231004 (8.42243)
+Comm  time (%) = 1.43051e-05 (0.0521567)
+Outpt time (%) = 9.05991e-06 (0.0330326)
+Other time (%) = 0.0250738 (91.4194)
+
+Nlocal:    600 ave 600 max 600 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    44 ave 44 max 44 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 44
+Ave neighs/atom = 0.0733333
+Neighbor list builds = 1
+Dangerous builds = 0
+unfix 			timecheck
+
+# Dump output
+#dump			dmp all custom 16000 dump.1 id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegez radius
+#dump			dumpstl all stl 16000 dump*.stl
+#dump			dump2 all custom 16000 dump.txt type x y z radius
+dump			dmp all custom/vtk 2000 post/couettec_*.vtk id type type x  y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+
+### Execution and further settings
+
+# Run 1.0 sec to insert and settle particles
+run 			160000 upto
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Feb  8 00:10:13 2020
+
+Memory usage per processor = 28.4499 Mbytes
+    Step    Atoms         KinEng            CPU 
+       1      600    0.014956828              0 
+     800      600    0.015112077     0.49970102 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 1067
+ - a total of 1199 particle templates (mass 6.643290e-03) inserted so far.
+    1600     1199    0.030573122       1.036128 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 2133
+ - a total of 1798 particle templates (mass 9.958849e-03) inserted so far.
+    2400     1798    0.046396359      1.5935268 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 3199
+ - a total of 2397 particle templates (mass 1.327840e-02) inserted so far.
+    3200     2397    0.062631447      2.1547348 
+    4000     2397    0.064319083       2.747592 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 4265
+ - a total of 2997 particle templates (mass 1.660214e-02) inserted so far.
+    4800     2997    0.081350725      3.3964159 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 5331
+ - a total of 3597 particle templates (mass 1.992987e-02) inserted so far.
+    5600     3597    0.095177548       4.043222 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 6397
+ - a total of 4197 particle templates (mass 2.325361e-02) inserted so far.
+    6400     4197     0.10587071      4.7840559 
+    7200     4197     0.10141598      5.5196719 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 7463
+ - a total of 4796 particle templates (mass 2.657316e-02) inserted so far.
+    8000     4796     0.11175086       6.336483 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 8529
+ - a total of 5396 particle templates (mass 2.989690e-02) inserted so far.
+    8800     5396     0.12207307      7.1632719 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 9595
+ - a total of 5995 particle templates (mass 3.321645e-02) inserted so far.
+    9600     5995     0.13271252      8.0496008 
+   10400     5995     0.12813662      9.0135078 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 10661
+ - a total of 6595 particle templates (mass 3.654019e-02) inserted so far.
+   11200     6595     0.13905196      10.035726 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 11727
+ - a total of 7194 particle templates (mass 3.985575e-02) inserted so far.
+   12000     7194     0.14938139      11.166305 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 12793
+ - a total of 7793 particle templates (mass 4.317131e-02) inserted so far.
+   12800     7793      0.1599281      12.302701 
+   13600     7793     0.15611142      13.497634 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 13859
+ - a total of 8393 particle templates (mass 4.649505e-02) inserted so far.
+   14400     8393     0.16610058      14.885773 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 14925
+ - a total of 8992 particle templates (mass 4.981460e-02) inserted so far.
+   15200     8992     0.17349506      16.300182 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 15991
+ - a total of 9592 particle templates (mass 5.313834e-02) inserted so far.
+   16000     9592     0.17934057      17.868659 
+   16800     9592     0.17004138      19.520239 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 17057
+ - a total of 10192 particle templates (mass 5.646208e-02) inserted so far.
+   17600    10192     0.17653478       21.23035 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 18123
+ - a total of 10792 particle templates (mass 5.978981e-02) inserted so far.
+   18400    10792     0.18305494      23.023046 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 19189
+ - a total of 11392 particle templates (mass 6.311355e-02) inserted so far.
+   19200    11392     0.19026112       24.89133 
+   20000    11392     0.18218502      26.812295 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 20255
+ - a total of 11992 particle templates (mass 6.643729e-02) inserted so far.
+   20800    11992     0.18848214      28.758167 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 21321
+ - a total of 12592 particle templates (mass 6.976103e-02) inserted so far.
+   21600    12592     0.19405106      30.795892 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 22387
+ - a total of 13192 particle templates (mass 7.308876e-02) inserted so far.
+   22400    13192     0.19858304      33.019251 
+   23200    13192     0.18756509      35.311276 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 23453
+ - a total of 13791 particle templates (mass 7.640831e-02) inserted so far.
+   24000    13791     0.19071525      37.801987 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 24519
+ - a total of 14391 particle templates (mass 7.973205e-02) inserted so far.
+   24800    14391     0.19398145      40.419404 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 25585
+ - a total of 14991 particle templates (mass 8.305579e-02) inserted so far.
+   25600    14991     0.19826475       43.09924 
+   26400    14991     0.18731818      45.940602 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 26651
+ - a total of 15591 particle templates (mass 8.637953e-02) inserted so far.
+   27200    15591     0.19176384      48.878572 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 27717
+ - a total of 16190 particle templates (mass 8.969908e-02) inserted so far.
+   28000    16190      0.1965489      52.043054 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 28783
+ - a total of 16789 particle templates (mass 9.301863e-02) inserted so far.
+   28800    16789     0.20178758      55.198448 
+   29600    16789     0.19157941      58.469796 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 29849
+ - a total of 17389 particle templates (mass 9.634237e-02) inserted so far.
+   30400    17389      0.1958931      62.031965 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 30915
+ - a total of 17989 particle templates (mass 9.966611e-02) inserted so far.
+   31200    17989     0.20070046      65.597786 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 31981
+ - a total of 18589 particle templates (mass 1.029899e-01) inserted so far.
+   32000    18589     0.20524366      69.423821 
+   32800    18589     0.19406252      73.353355 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 33047
+ - a total of 19189 particle templates (mass 1.063136e-01) inserted so far.
+   33600    19189     0.19806064      77.404269 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 34113
+ - a total of 19789 particle templates (mass 1.096373e-01) inserted so far.
+   34400    19789      0.2017097      81.777312 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 35179
+ - a total of 20389 particle templates (mass 1.129611e-01) inserted so far.
+   35200    20389     0.20610402      86.174705 
+   36000    20389     0.19557446      90.794611 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 36245
+ - a total of 20989 particle templates (mass 1.162848e-01) inserted so far.
+   36800    20989      0.1995488      95.477898 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 37311
+ - a total of 21589 particle templates (mass 1.196085e-01) inserted so far.
+   37600    21589     0.20430034       100.3453 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 38377
+ - a total of 22189 particle templates (mass 1.229363e-01) inserted so far.
+   38400    22189     0.20928296      105.53713 
+   39200    22189     0.19754703      110.75116 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 39443
+ - a total of 22789 particle templates (mass 1.262600e-01) inserted so far.
+   40000    22789      0.2010305      116.28609 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 40509
+ - a total of 23389 particle templates (mass 1.295838e-01) inserted so far.
+   40800    23389     0.20448756      121.88575 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 41575
+ - a total of 23989 particle templates (mass 1.329075e-01) inserted so far.
+   41600    23989     0.20802688      127.78365 
+   42400    23989     0.19559698      133.89517 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 42641
+ - a total of 24589 particle templates (mass 1.362352e-01) inserted so far.
+   43200    24589     0.19992829      140.15326 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 43707
+ - a total of 25189 particle templates (mass 1.395590e-01) inserted so far.
+   44000    25189     0.20457367      146.63925 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 44773
+ - a total of 25788 particle templates (mass 1.428785e-01) inserted so far.
+   44800    25788     0.20785519      153.35896 
+   45600    25788     0.19750372      160.19401 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 45839
+ - a total of 26388 particle templates (mass 1.462023e-01) inserted so far.
+   46400    26388     0.20085141       167.2859 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 46905
+ - a total of 26988 particle templates (mass 1.495300e-01) inserted so far.
+   47200    26988     0.20405173      174.53171 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 47971
+ - a total of 27588 particle templates (mass 1.528537e-01) inserted so far.
+   48000    27588     0.20772249      181.98319 
+   48800    27588     0.19634096      189.60356 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 49037
+ - a total of 28188 particle templates (mass 1.561775e-01) inserted so far.
+   49600    28188     0.20060849      197.39029 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 50103
+ - a total of 28788 particle templates (mass 1.595012e-01) inserted so far.
+   50400    28788     0.20430275       205.5894 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 51169
+ - a total of 29388 particle templates (mass 1.628250e-01) inserted so far.
+   51200    29388     0.20789279      213.87985 
+   52000    29388     0.19636778      222.47965 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 52235
+ - a total of 29988 particle templates (mass 1.661487e-01) inserted so far.
+   52800    29988     0.19936159      231.26104 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 53301
+ - a total of 30587 particle templates (mass 1.694682e-01) inserted so far.
+   53600    30587     0.20369836      240.11354 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 54367
+ - a total of 31186 particle templates (mass 1.727838e-01) inserted so far.
+   54400    31186     0.20698129      249.41187 
+   55200    31186     0.19628137       258.7955 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 55433
+ - a total of 31786 particle templates (mass 1.761075e-01) inserted so far.
+   56000    31786     0.19986857      268.47629 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 56499
+ - a total of 32385 particle templates (mass 1.794271e-01) inserted so far.
+   56800    32385     0.20388168      278.17952 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 57565
+ - a total of 32985 particle templates (mass 1.827508e-01) inserted so far.
+   57600    32985     0.20842572      288.08918 
+   58400    32985     0.19735695      298.43873 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 58631
+ - a total of 33584 particle templates (mass 1.860704e-01) inserted so far.
+   59200    33584     0.20098762      308.90277 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 59697
+ - a total of 34183 particle templates (mass 1.893899e-01) inserted so far.
+   60000    34183     0.20505083       319.6595 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 60763
+ - a total of 34783 particle templates (mass 1.927137e-01) inserted so far.
+   60800    34783     0.20833293      330.50628 
+   61600    34783     0.19731091      341.57222 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 61829
+ - a total of 35382 particle templates (mass 1.960332e-01) inserted so far.
+   62400    35382      0.2015438      353.04835 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 62895
+ - a total of 35981 particle templates (mass 1.993528e-01) inserted so far.
+   63200    35981     0.20630859      364.46382 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 63961
+ - a total of 36580 particle templates (mass 2.026723e-01) inserted so far.
+   64000    36580     0.21076971      376.37845 
+   64800    36580     0.19892022      388.29952 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 65027
+ - a total of 37180 particle templates (mass 2.059961e-01) inserted so far.
+   65600    37180     0.20260511      400.53478 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 66093
+ - a total of 37780 particle templates (mass 2.093238e-01) inserted so far.
+   66400    37780     0.20654417      413.09032 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 67159
+ - a total of 38380 particle templates (mass 2.126475e-01) inserted so far.
+   67200    38380      0.2096528      425.71901 
+   68000    38380     0.19842877      438.72683 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 68225
+ - a total of 38980 particle templates (mass 2.159713e-01) inserted so far.
+   68800    38980     0.20204167      451.76933 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 69291
+ - a total of 39579 particle templates (mass 2.192908e-01) inserted so far.
+   69600    39579     0.20521818      465.11474 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 70357
+ - a total of 40179 particle templates (mass 2.226146e-01) inserted so far.
+   70400    40179      0.2085884      478.93421 
+   71200    40179     0.19787233      492.71339 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.323740e-03) at step 71423
+ - a total of 40779 particle templates (mass 2.259383e-01) inserted so far.
+   72000    40779     0.20140635      506.92627 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 72489
+ - a total of 41378 particle templates (mass 2.292579e-01) inserted so far.
+   72800    41378     0.20392982      521.16246 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 73555
+ - a total of 41977 particle templates (mass 2.325774e-01) inserted so far.
+   73600    41977      0.2082667      535.54701 
+   74400    41977     0.19660492      550.34576 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 74621
+ - a total of 42576 particle templates (mass 2.358970e-01) inserted so far.
+   75200    42576     0.20038528      565.26422 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.319551e-03) at step 75687
+ - a total of 43175 particle templates (mass 2.392165e-01) inserted so far.
+   76000    43175     0.20411849      580.55494 
+INFO: Particle insertion ins: inserted 600 particle templates (mass 3.327732e-03) at step 76753
+ - a total of 43775 particle templates (mass 2.425442e-01) inserted so far.
+   76800    43775     0.20811389      595.97365 
+   77600    43775     0.19669125      611.47042 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 77819
+ - a total of 44374 particle templates (mass 2.458598e-01) inserted so far.
+   78400    44374     0.20000496      627.51102 
+INFO: Particle insertion ins: inserted 599 particle templates (mass 3.315558e-03) at step 78885
+ - a total of 44973 particle templates (mass 2.491754e-01) inserted so far.
+   79200    44973     0.20379221       643.5051 
+INFO: Particle insertion ins: inserted 27 particle templates (mass 1.490293e-04) at step 79951
+ - a total of 45000 particle templates (mass 2.493244e-01) inserted so far.
+   80000    45000      0.1932347      659.95062 
+   80800    45000     0.18153892       676.2908 
+   81600    45000     0.16967778      693.05445 
+   82400    45000     0.15752251      710.15016 
+   83200    45000     0.14428621      727.17985 
+   84000    45000     0.13184618      744.56629 
+   84800    45000     0.12048561      761.94532 
+   85600    45000      0.1139747      779.33711 
+   86400    45000     0.10808943      797.24856 
+   87200    45000     0.10338447      815.33709 
+   88000    45000    0.098576882      833.67624 
+   88800    45000    0.094015905      851.95893 
+   89600    45000    0.088855211      870.59391 
+   90400    45000    0.083904367      889.47892 
+   91200    45000    0.078825337      908.31513 
+   92000    45000    0.073795063      927.50878 
+   92800    45000    0.069051382      946.68793 
+   93600    45000    0.064440264      966.00099 
+   94400    45000    0.058900861      985.66664 
+   95200    45000    0.053806878      1005.2355 
+   96000    45000    0.048277854      1025.0919 
+   96800    45000    0.043213091      1044.7811 
+   97600    45000    0.038737896      1064.6179 
+   98400    45000    0.034561256      1084.7687 
+   99200    45000     0.03069736      1104.9165 
+  100000    45000    0.027493965      1125.4184 
+  100800    45000    0.024436715      1145.6371 
+  101600    45000    0.022020968      1166.0399 
+  102400    45000     0.01980431       1186.572 
+  103200    45000    0.018043982      1207.1372 
+  104000    45000    0.016784817      1227.6398 
+  104800    45000    0.015758105      1248.3049 
+  105600    45000     0.01498921      1269.1565 
+  106400    45000    0.014485471      1289.8886 
+  107200    45000    0.014032834       1310.623 
+  108000    45000     0.01378398      1331.7711 
+  108800    45000    0.013735784      1352.7729 
+  109600    45000    0.013741996       1373.888 
+  110400    45000    0.013730929      1395.1554 
+  111200    45000    0.013813055       1416.202 
+  112000    45000    0.013988251      1437.5707 
+  112800    45000    0.014054505      1459.0567 
+  113600    45000    0.014059126      1480.3989 
+  114400    45000    0.014255402      1501.7829 
+  115200    45000    0.014341986      1523.1835 
+  116000    45000    0.014324516      1545.0424 
+  116800    45000    0.014124022       1566.644 
+  117600    45000    0.013880021      1588.1705 
+  118400    45000    0.013554576       1610.006 
+  119200    45000    0.013059322      1631.8421 
+  120000    45000    0.012659167      1653.7135 
+  120800    45000    0.012079472      1675.3828 
+  121600    45000       0.011381      1697.1093 
+  122400    45000    0.010723074      1719.0434 
+  123200    45000    0.010004461      1740.8565 
+  124000    45000   0.0091361951       1762.842 
+  124800    45000   0.0083052949      1784.7421 
+  125600    45000   0.0076530029      1806.5722 
+  126400    45000   0.0072103751      1828.5959 
+  127200    45000    0.006589935      1850.8206 
+  128000    45000   0.0061366539      1873.4039 
+  128800    45000   0.0057156077      1895.6445 
+  129600    45000    0.005380453      1917.7846 
+  130400    45000    0.005062871      1940.4558 
+  131200    45000   0.0047735425      1962.6681 
+  132000    45000   0.0044729005      1985.3424 
+  132800    45000   0.0041907164      2007.7591 
+  133600    45000   0.0040021098      2030.2469 
+  134400    45000   0.0038462172      2052.6928 
+  135200    45000   0.0035932271      2075.2397 
+  136000    45000   0.0033009182      2098.0546 
+  136800    45000   0.0031248864      2120.5731 
+  137600    45000   0.0029394403      2143.0447 
+  138400    45000   0.0028437975      2165.3602 
+  139200    45000   0.0027030892      2188.0369 
+  140000    45000   0.0025445769      2210.9436 
+  140800    45000   0.0024118702      2233.7031 
+  141600    45000   0.0022318174      2256.1266 
+  142400    45000   0.0021263619      2279.0833 
+  143200    45000   0.0020941733      2301.9492 
+  144000    45000   0.0020214893      2324.8879 
+  144800    45000   0.0019462396      2347.5703 
+  145600    45000   0.0018504657      2370.1734 
+  146400    45000    0.001752619      2393.2041 
+  147200    45000   0.0017270037      2415.9339 
+  148000    45000   0.0016299182      2439.1773 
+  148800    45000   0.0015428294      2462.0116 
+  149600    45000   0.0015276497      2484.9859 
+  150400    45000   0.0014327862      2508.0874 
+  151200    45000   0.0013608535      2530.9769 
+  152000    45000   0.0013155173      2554.2205 
+  152800    45000   0.0012813015      2577.1491 
+  153600    45000   0.0011838887       2600.041 
+  154400    45000   0.0011063974      2623.0965 
+  155200    45000   0.0010415393      2645.8764 
+  156000    45000  0.00099995251      2669.0536 
+  156800    45000  0.00094770812      2692.0957 
+  157600    45000  0.00089864565      2714.9751 
+  158400    45000  0.00089139069      2738.2059 
+  159200    45000  0.00086996561      2761.1123 
+  160000    45000   0.0008275007      2784.4405 
+Loop time of 2784.44 on 1 procs for 159999 steps with 45000 atoms, finish time Sat Feb  8 00:56:38 2020
+
+
+Pair  time (%) = 1775.51 (63.7655)
+Neigh time (%) = 183.025 (6.57313)
+Comm  time (%) = 3.42201 (0.122898)
+Outpt time (%) = 12.2456 (0.439788)
+Other time (%) = 810.235 (29.0987)
+
+Nlocal:    45000 ave 45000 max 45000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    282469 ave 282469 max 282469 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 282469
+Ave neighs/atom = 6.27709
+Neighbor list builds = 6233
+Dangerous builds = 0
+
+# Remove the stopper and start the rotation
+unfix 			geometry
+fix			geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes cad1 cad2 cad3 cad4
+fix			movecad all move/mesh mesh cad4 rotate origin 0. 0. 0. axis 0. 0. 1. period 1.
+
+# Run 30 sec
+run 			480000
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Feb  8 00:56:38 2020
+
+Memory usage per processor = 67.2839 Mbytes
+    Step    Atoms         KinEng            CPU 
+  160000    45000   0.0008275007              0 
+  160800    45000  0.00077164716      22.791578 
+  161600    45000  0.00072413797      45.655778 
+  162400    45000  0.00069914414      68.796984 
+  163200    45000  0.00068024016       91.62714 
+  164000    45000  0.00066047257      114.80544 
+  164800    45000  0.00060485324      137.61557 
+  165600    45000  0.00061702166      160.50998 
+  166400    45000  0.00058789368      183.58508 
+  167200    45000  0.00055498653      206.60462 
+  168000    45000  0.00054929895      229.70931 
+  168800    45000  0.00052239506      252.61174 
+  169600    45000  0.00051791554      275.56522 
+  170400    45000  0.00047235161      298.68921 
+  171200    45000   0.0004386603      321.56311 
+  172000    45000   0.0004191832      344.68226 
+  172800    45000  0.00038660292      367.63096 
+  173600    45000  0.00037652129      390.50503 
+  174400    45000  0.00037647671      413.69606 
+  175200    45000  0.00036312886      436.58052 
+  176000    45000  0.00034193256       459.7621 
+  176800    45000  0.00035132897      482.74984 
+  177600    45000  0.00034177482      505.73692 
+  178400    45000  0.00032891789      529.01834 
+  179200    45000  0.00031395299      551.97262 
+  180000    45000  0.00030579056      575.10919 
+  180800    45000  0.00028946595      598.07994 
+  181600    45000  0.00027858203      620.99489 
+  182400    45000   0.0002769162      644.15179 
+  183200    45000  0.00026657618      667.01668 
+  184000    45000  0.00023650415      690.16471 
+  184800    45000  0.00021665542       713.1076 
+  185600    45000  0.00021677572      736.03441 
+  186400    45000  0.00019965714      759.27714 
+  187200    45000  0.00017512811      782.18562 
+  188000    45000  0.00015819883      805.34154 
+  188800    45000  0.00015271012      828.32869 
+  189600    45000  0.00012484287      850.92128 
+  190400    45000  0.00011189728      873.80339 
+  191200    45000  0.00010857381      896.44386 
+  192000    45000  0.00010388119       919.3685 
+  192800    45000  0.00010689973      942.10664 
+  193600    45000  0.00011051801      964.81945 
+  194400    45000  0.00010394738      987.98676 
+  195200    45000  0.00010830828      1011.1059 
+  196000    45000  0.00010582037      1034.5025 
+  196800    45000  0.00011002182      1057.5741 
+  197600    45000  9.8062374e-05       1080.562 
+  198400    45000  9.1280466e-05      1103.7362 
+  199200    45000  8.3910673e-05      1126.8064 
+  200000    45000  8.4130728e-05      1150.0505 
+  200800    45000  7.9737904e-05      1172.9731 
+  201600    45000  6.6981213e-05       1195.985 
+  202400    45000  5.8154474e-05      1219.2988 
+  203200    45000  4.9344725e-05       1242.312 
+  204000    45000  5.0792426e-05      1265.4135 
+  204800    45000  4.3258543e-05       1288.371 
+  205600    45000  3.9198447e-05      1311.3877 
+  206400    45000   3.892227e-05       1334.607 
+  207200    45000  3.9621622e-05      1357.7387 
+  208000    45000   4.069491e-05      1381.1688 
+  208800    45000  3.1400499e-05      1404.2149 
+  209600    45000  3.2434847e-05       1427.192 
+  210400    45000   3.420817e-05      1450.4586 
+  211200    45000  3.3508433e-05      1473.5162 
+  212000    45000  2.4934186e-05      1496.8437 
+  212800    45000  2.6414061e-05      1519.6934 
+  213600    45000  2.7435562e-05      1542.5892 
+  214400    45000  2.6918914e-05      1565.7768 
+  215200    45000  2.8145763e-05      1588.7577 
+  216000    45000  2.8932066e-05      1611.9873 
+  216800    45000  3.0829831e-05      1635.0499 
+  217600    45000  3.0502575e-05      1658.1399 
+  218400    45000  3.2451073e-05      1681.5134 
+  219200    45000  2.8617558e-05      1704.6072 
+  220000    45000   2.995604e-05      1728.3527 
+  220800    45000  2.3660585e-05      1752.8667 
+  221600    45000  2.4370431e-05       1776.692 
+  222400    45000  2.5583786e-05      1800.9964 
+  223200    45000   2.374689e-05      1824.2995 
+  224000    45000  2.5062026e-05      1847.3585 
+  224800    45000  2.6692972e-05      1870.2137 
+  225600    45000  2.7168894e-05      1892.9587 
+  226400    45000  2.8957758e-05      1916.0701 
+  227200    45000  3.0793186e-05       1939.153 
+  228000    45000  3.1863037e-05      1962.3735 
+  228800    45000  3.3814834e-05      1985.3083 
+  229600    45000  3.6066783e-05      2008.3502 
+  230400    45000  3.8215699e-05      2031.5439 
+  231200    45000  2.9910538e-05      2054.5305 
+  232000    45000  3.1911303e-05      2077.6989 
+  232800    45000  3.3083124e-05      2100.7328 
+  233600    45000  3.4925866e-05      2123.7828 
+  234400    45000  3.0033845e-05      2147.0304 
+  235200    45000  3.1013398e-05      2170.1511 
+  236000    45000  2.7099309e-05      2193.4152 
+  236800    45000  2.2837623e-05      2216.4571 
+  237600    45000  2.3665959e-05      2239.3448 
+  238400    45000  2.1516265e-05      2262.6349 
+  239200    45000  2.0025545e-05      2285.6102 
+  240000    45000  2.0939749e-05      2308.9034 
+  240800    45000  1.6582126e-05      2331.9482 
+  241600    45000  1.7354786e-05      2354.8415 
+  242400    45000  1.7911164e-05      2377.9265 
+  243200    45000  1.5955844e-05      2400.8505 
+  244000    45000  1.6328932e-05      2423.9531 
+  244800    45000  1.7065995e-05      2446.9657 
+  245600    45000  1.7846885e-05      2469.9623 
+  246400    45000  8.2773146e-06      2493.1126 
+  247200    45000  8.3987344e-06      2515.6782 
+  248000    45000  8.6891446e-06      2538.4557 
+  248800    45000  6.0279925e-06      2560.9655 
+  249600    45000  4.1524656e-06      2583.2245 
+  250400    45000   3.974244e-06      2605.5368 
+  251200    45000  3.7659188e-06      2627.7596 
+  252000    45000  2.9165719e-06      2650.1932 
+  252800    45000  2.7172195e-06      2672.3113 
+  253600    45000  2.5513557e-06      2694.4086 
+  254400    45000   2.435006e-06      2716.7811 
+  255200    45000  2.4163115e-06      2738.9352 
+  256000    45000  2.3828206e-06      2761.3566 
+  256800    45000  2.4567174e-06      2783.4984 
+  257600    45000  2.5692793e-06      2805.7003 
+  258400    45000  2.1636609e-06      2828.1942 
+  259200    45000  2.2557724e-06      2850.5416 
+  260000    45000  2.4839112e-06      2873.2822 
+  260800    45000  2.5363368e-06      2895.6442 
+  261600    45000  2.2587679e-06      2917.7787 
+  262400    45000  2.1407619e-06      2940.5551 
+  263200    45000  2.1846537e-06      2962.7527 
+  264000    45000  2.2426787e-06      2985.0287 
+  264800    45000  2.0765451e-06      3007.1804 
+  265600    45000  1.6570243e-06      3029.2726 
+  266400    45000  1.7200764e-06      3051.5864 
+  267200    45000  1.6875623e-06      3073.6735 
+  268000    45000  1.7596264e-06      3096.1465 
+  268800    45000  1.8638826e-06      3118.3413 
+  269600    45000  1.9648026e-06      3140.5674 
+  270400    45000  1.3295267e-06      3162.8992 
+  271200    45000  1.4074813e-06      3184.9076 
+  272000    45000  1.3846684e-06      3207.1715 
+  272800    45000  1.4755916e-06      3229.4148 
+  273600    45000  1.3542666e-06      3254.6661 
+  274400    45000  1.4470113e-06      3278.2368 
+  275200    45000  1.5264461e-06       3300.349 
+  276000    45000  6.1495706e-07      3322.3916 
+  276800    45000   6.734679e-07       3344.309 
+  277600    45000  5.0962496e-07      3366.1557 
+  278400    45000  4.8093329e-07      3388.1686 
+  279200    45000  3.1063621e-07      3410.0793 
+  280000    45000  3.3499072e-07       3432.103 
+  280800    45000  4.6449962e-07      3453.9421 
+  281600    45000  4.1379565e-07      3475.8396 
+  282400    45000  5.0126495e-07      3497.9261 
+  283200    45000  3.7434689e-07      3519.7723 
+  284000    45000  3.0369351e-07      3541.8649 
+  284800    45000  1.8584906e-07      3563.8065 
+  285600    45000  2.1558475e-07      3585.6682 
+  286400    45000  1.6766164e-07      3607.8341 
+  287200    45000  1.6886171e-07      3630.1202 
+  288000    45000  1.5231514e-07      3653.4016 
+  288800    45000  1.6494898e-07      3676.5729 
+  289600    45000  1.7135252e-07      3699.2231 
+  290400    45000  2.2160692e-07       3723.349 
+  291200    45000  2.3121222e-07      3747.2361 
+  292000    45000  2.3863272e-07      3769.7803 
+  292800    45000  2.6304236e-07      3792.6325 
+  293600    45000  3.4673025e-07       3814.923 
+  294400    45000  3.2685065e-07      3837.1566 
+  295200    45000  3.7007151e-07       3860.144 
+  296000    45000  2.4374011e-07      3883.8514 
+  296800    45000   2.514704e-07      3907.2857 
+  297600    45000  3.0748619e-07      3932.8988 
+  298400    45000  2.2606265e-07      3955.2313 
+  299200    45000  1.9740262e-07      3978.3093 
+  300000    45000  2.9679022e-07      4000.8753 
+  300800    45000  2.1907454e-07      4024.2392 
+  301600    45000  2.4107931e-07      4047.5233 
+  302400    45000  2.0195278e-07       4072.561 
+  303200    45000   2.239596e-07      4097.2775 
+  304000    45000  2.2130982e-07       4120.846 
+  304800    45000  2.3775854e-07      4143.9609 
+  305600    45000   2.643519e-07      4166.2734 
+  306400    45000  3.9728199e-07      4188.3087 
+  307200    45000  3.1198707e-07      4210.1587 
+  308000    45000  3.9293333e-07      4232.3125 
+  308800    45000  5.1463795e-07      4254.1937 
+  309600    45000  4.7899069e-07      4276.0515 
+  310400    45000  3.3879346e-07      4298.0714 
+  311200    45000  2.4137334e-07      4319.9581 
+  312000    45000  2.2916221e-07      4342.6282 
+  312800    45000  2.3098935e-07      4365.1595 
+  313600    45000  1.2606347e-07      4387.4784 
+  314400    45000  1.3979115e-07      4410.5108 
+  315200    45000  1.5386645e-07      4433.6331 
+  316000    45000  1.6571524e-07      4456.6549 
+  316800    45000  1.8143617e-07       4479.076 
+  317600    45000  1.5829534e-07      4502.5486 
+  318400    45000  2.0727902e-07      4526.4129 
+  319200    45000  1.6547398e-07      4549.8491 
+  320000    45000  2.5508121e-07      4573.3104 
+  320800    45000  1.4200222e-07      4597.0662 
+  321600    45000  1.5418813e-07      4620.3743 
+  322400    45000  1.9041244e-07        4643.64 
+  323200    45000  1.5286308e-07      4666.9115 
+  324000    45000  1.5661891e-07      4690.1592 
+  324800    45000   2.556715e-07      4713.2156 
+  325600    45000   1.639528e-07      4736.3138 
+  326400    45000  1.6831121e-07      4759.1473 
+  327200    45000  1.4117656e-07      4783.3178 
+  328000    45000  1.2870259e-07       4808.162 
+  328800    45000  1.3643649e-07      4832.1532 
+  329600    45000  2.1403917e-07      4857.4056 
+  330400    45000  2.2448916e-07      4882.7576 
+  331200    45000  1.4008474e-07      4907.8125 
+  332000    45000  1.5295293e-07      4932.7763 
+  332800    45000  1.7157839e-07        4957.46 
+  333600    45000  1.6791454e-07      4981.8501 
+  334400    45000  1.4050943e-07      5005.0886 
+  335200    45000  1.9353871e-07      5027.3565 
+  336000    45000  2.5074502e-07      5049.5866 
+  336800    45000   1.761238e-07      5072.2074 
+  337600    45000  5.7687744e-07      5095.2428 
+  338400    45000  1.6478591e-07      5118.2879 
+  339200    45000  1.3190684e-07      5140.4787 
+  340000    45000  1.2492628e-07      5163.4741 
+  340800    45000  1.8853354e-07      5185.4503 
+  341600    45000  1.9998219e-07      5207.3874 
+  342400    45000  1.7323543e-07      5229.4316 
+  343200    45000  2.3444223e-07      5251.3321 
+  344000    45000  1.7842496e-07      5273.3678 
+  344800    45000  1.9709249e-07      5295.2065 
+  345600    45000  2.1287019e-07      5317.1405 
+  346400    45000  2.1447131e-07      5339.3701 
+  347200    45000  2.1079289e-07      5361.5852 
+  348000    45000  2.1583733e-07       5383.925 
+  348800    45000  2.5463548e-07      5405.7989 
+  349600    45000  1.8478821e-07      5427.6495 
+  350400    45000  2.6147817e-07      5450.0424 
+  351200    45000  1.9602793e-07      5472.5552 
+  352000    45000  1.3445249e-07      5495.8485 
+  352800    45000  1.2985798e-07      5520.1975 
+  353600    45000  2.4743478e-07      5542.9151 
+  354400    45000  2.5692495e-07      5565.6972 
+  355200    45000  2.9726556e-07      5587.7655 
+  356000    45000  2.9093429e-07       5609.925 
+  356800    45000  3.0005329e-07      5631.9156 
+  357600    45000  2.8092135e-07      5654.6602 
+  358400    45000  2.7527757e-07      5677.7236 
+  359200    45000  3.6688908e-07      5700.1564 
+  360000    45000  3.4766743e-07      5724.4687 
+  360800    45000  4.1576255e-07      5747.0888 
+  361600    45000  4.1937572e-07      5769.0738 
+  362400    45000  3.6387741e-07      5791.3594 
+  363200    45000  5.4070677e-07       5813.593 
+  364000    45000  3.6927582e-07      5837.3807 
+  364800    45000  4.1412628e-07      5860.9497 
+  365600    45000  3.4038553e-07      5885.0256 
+  366400    45000  2.2376664e-07      5909.3943 
+  367200    45000  1.5577977e-07      5932.0631 
+  368000    45000  1.8506171e-07      5954.1712 
+  368800    45000  1.5382831e-07      5976.4065 
+  369600    45000  1.5421837e-07      5999.4646 
+  370400    45000  1.4618141e-07      6023.7412 
+  371200    45000  1.1204997e-07      6048.0802 
+  372000    45000  1.3678247e-07      6071.7967 
+  372800    45000  1.4941539e-07      6094.5886 
+  373600    45000  1.4042179e-07      6117.3173 
+  374400    45000  1.5696491e-07      6140.9899 
+  375200    45000  2.0359337e-07      6165.6547 
+  376000    45000  2.2635244e-07      6189.4633 
+  376800    45000  1.4778996e-07      6212.2664 
+  377600    45000  1.3097082e-07      6235.1565 
+  378400    45000  1.4050217e-07      6258.9654 
+  379200    45000  1.0023453e-07      6283.2226 
+  380000    45000  1.0963297e-07      6305.9125 
+  380800    45000  1.8192909e-07      6327.9535 
+  381600    45000  1.4258903e-07      6349.7778 
+  382400    45000  1.3072353e-07      6371.8494 
+  383200    45000  1.7214537e-07       6393.676 
+  384000    45000   2.933284e-07      6416.9503 
+  384800    45000  2.5760267e-07      6439.8387 
+  385600    45000  2.0739993e-07      6462.2366 
+  386400    45000  2.3311434e-07      6484.5085 
+  387200    45000   2.556766e-07      6506.5926 
+  388000    45000   3.580223e-07      6530.4243 
+  388800    45000  4.3323285e-07      6554.8568 
+  389600    45000  2.5142962e-07        6577.47 
+  390400    45000  2.1894139e-07      6599.5097 
+  391200    45000  1.3857652e-07      6622.0297 
+  392000    45000  1.7735766e-07      6644.7571 
+  392800    45000  3.1652504e-07      6668.1794 
+  393600    45000  1.8636398e-07      6692.0336 
+  394400    45000  1.4220936e-07      6715.2295 
+  395200    45000  2.0609427e-07      6738.1252 
+  396000    45000  3.6383697e-07      6761.3692 
+  396800    45000  2.3242676e-07      6784.1308 
+  397600    45000  2.8394724e-07      6806.8295 
+  398400    45000  1.8826171e-07      6830.0256 
+  399200    45000  1.9835929e-07      6852.6194 
+  400000    45000  2.4725228e-07      6875.7395 
+  400800    45000  2.1488947e-07      6899.1564 
+  401600    45000  1.8608685e-07      6922.9864 
+  402400    45000   2.337512e-07      6946.6801 
+  403200    45000  1.5746884e-07      6969.3589 
+  404000    45000  2.3751223e-07      6993.2699 
+  404800    45000  1.4698608e-07      7016.9172 
+  405600    45000   1.556676e-07      7040.3614 
+  406400    45000  1.4354412e-07      7062.7685 
+  407200    45000  1.0169158e-07      7085.6033 
+  408000    45000  7.5678394e-08      7108.5011 
+  408800    45000  8.1682769e-08      7131.7371 
+  409600    45000  1.3896412e-07      7155.2104 
+  410400    45000  5.9108777e-08      7178.0952 
+  411200    45000  9.3984061e-08       7201.772 
+  412000    45000  1.2322955e-07      7224.5991 
+  412800    45000  1.6289368e-07      7247.4264 
+  413600    45000  2.3049217e-07      7270.1253 
+  414400    45000  2.1739174e-07      7293.0055 
+  415200    45000  2.0104957e-07      7315.4542 
+  416000    45000  2.9423525e-07      7338.5203 
+  416800    45000   2.795288e-07      7361.3754 
+  417600    45000  2.3992667e-07      7385.0103 
+  418400    45000  3.3373723e-07      7409.6727 
+  419200    45000  2.8128852e-07      7434.5261 
+  420000    45000   2.940335e-07      7459.2163 
+  420800    45000  2.4779576e-07      7483.2709 
+  421600    45000  1.7602668e-07      7506.6409 
+  422400    45000  1.7871621e-07      7529.2355 
+  423200    45000  1.9870542e-07      7552.2183 
+  424000    45000  2.1583345e-07      7575.9785 
+  424800    45000  2.1163018e-07      7599.0408 
+  425600    45000  2.0957304e-07      7621.7445 
+  426400    45000  1.7159752e-07      7644.4366 
+  427200    45000  1.7189128e-07      7666.6333 
+  428000    45000  1.0851405e-07      7688.9661 
+  428800    45000  1.6514249e-07      7711.0484 
+  429600    45000  8.0125571e-08      7733.2169 
+  430400    45000  1.2129626e-07      7755.5121 
+  431200    45000  1.3365961e-07      7777.6759 
+  432000    45000   2.640848e-07      7800.0315 
+  432800    45000   1.404986e-07      7822.1437 
+  433600    45000  1.2020547e-07      7844.2033 
+  434400    45000  1.3586722e-07      7866.6238 
+  435200    45000  1.8048313e-07      7888.7493 
+  436000    45000  6.7761507e-07      7910.9892 
+  436800    45000  2.0535038e-07      7933.0812 
+  437600    45000  2.2842207e-07      7955.1939 
+  438400    45000  1.7117974e-07      7977.3907 
+  439200    45000  2.1364521e-07      7999.5133 
+  440000    45000  2.2137778e-07      8021.9615 
+  440800    45000  2.4569308e-07      8044.5448 
+  441600    45000  3.1191684e-07       8068.387 
+  442400    45000  3.3726668e-07      8092.4731 
+  443200    45000  3.9978114e-07      8115.6368 
+  444000    45000  4.1097939e-07      8137.8407 
+  444800    45000   6.182218e-07      8160.8071 
+  445600    45000  6.7788118e-07      8183.5402 
+  446400    45000    7.94392e-07      8206.8487 
+  447200    45000    8.76612e-07      8230.3619 
+  448000    45000   1.082642e-06           8254 
+  448800    45000  1.3224409e-06      8278.8789 
+  449600    45000  1.8962287e-06      8304.1569 
+  450400    45000  1.8744737e-06      8328.5449 
+  451200    45000  2.1425292e-06      8354.5989 
+  452000    45000  2.4776348e-06      8379.4423 
+  452800    45000  2.7433494e-06       8403.989 
+  453600    45000  2.9920229e-06      8428.3929 
+  454400    45000   3.363896e-06      8452.7796 
+  455200    45000  3.6773985e-06      8480.8004 
+  456000    45000   4.031127e-06      8509.0969 
+  456800    45000   4.441291e-06      8535.7901 
+  457600    45000  4.8803605e-06      8561.9732 
+  458400    45000  5.3491273e-06      8588.3171 
+  459200    45000  5.7981901e-06      8614.8645 
+  460000    45000  6.1906086e-06      8641.4976 
+  460800    45000  6.7132244e-06       8667.752 
+  461600    45000  7.2192049e-06       8694.043 
+  462400    45000  7.7137539e-06      8720.6161 
+  463200    45000  8.3142972e-06      8747.1242 
+  464000    45000  8.9331843e-06      8773.5079 
+  464800    45000  9.4593395e-06      8801.6268 
+  465600    45000  1.0046013e-05      8831.2192 
+  466400    45000   1.073531e-05      8860.8992 
+  467200    45000  1.1460686e-05      8888.2631 
+  468000    45000  1.2184306e-05      8917.5002 
+  468800    45000  1.2804636e-05      8948.5401 
+  469600    45000  1.3468874e-05      8977.3937 
+  470400    45000  1.4290557e-05      9006.4591 
+  471200    45000  1.5121098e-05      9035.7035 
+  472000    45000  6.2008314e-06      9066.7652 
+  472800    45000  6.7878927e-06      9097.7955 
+  473600    45000  7.1729228e-06      9128.0373 
+  474400    45000  7.3961242e-06      9156.5234 
+  475200    45000  7.6068802e-06      9187.0769 
+  476000    45000  7.9798683e-06      9218.1355 
+  476800    45000  1.5110447e-06      9249.2711 
+  477600    45000  1.3149572e-06      9278.1152 
+  478400    45000  9.5635463e-07      9304.1542 
+  479200    45000  9.1776403e-07      9329.3063 
+  480000    45000  7.7193341e-07      9354.7887 
+  480800    45000   6.698068e-07      9380.2037 
+  481600    45000  6.8087847e-07      9405.2881 
+  482400    45000  5.6833967e-07      9430.5714 
+  483200    45000  5.2434177e-07      9455.7384 
+  484000    45000  4.5204329e-07      9481.2072 
+  484800    45000  5.6197078e-07      9506.1312 
+  485600    45000  5.8843174e-07      9531.1999 
+  486400    45000  6.1364667e-07      9556.5703 
+  487200    45000  1.0082885e-06      9582.3716 
+  488000    45000  8.1289419e-07      9608.3945 
+  488800    45000  1.0282021e-06      9634.6187 
+  489600    45000  7.2303367e-07      9658.8533 
+  490400    45000  7.1639761e-07      9682.2693 
+  491200    45000  7.0485559e-07      9704.3524 
+  492000    45000  7.8271147e-07      9728.0138 
+  492800    45000  9.1834704e-07       9750.804 
+  493600    45000  1.1547415e-06       9773.554 
+  494400    45000  1.2009188e-06      9796.4848 
+  495200    45000  1.3156967e-06      9819.5968 
+  496000    45000  1.5328072e-06      9842.7242 
+  496800    45000  1.7323328e-06       9866.719 
+  497600    45000  2.0360003e-06      9890.8599 
+  498400    45000  2.2359736e-06       9915.247 
+  499200    45000  2.5136826e-06      9938.3988 
+  500000    45000  2.8364217e-06      9962.9694 
+  500800    45000  3.1278102e-06      9986.4091 
+  501600    45000  3.5308594e-06      10008.626 
+  502400    45000  3.8332352e-06      10031.961 
+  503200    45000  4.2703389e-06      10060.313 
+  504000    45000  4.7179886e-06      10087.242 
+  504800    45000  5.1442778e-06      10114.763 
+  505600    45000  5.5507629e-06      10144.318 
+  506400    45000  6.0839243e-06      10173.649 
+  507200    45000  6.5330501e-06      10204.002 
+  508000    45000  6.9862531e-06      10234.672 
+  508800    45000  7.5788783e-06      10264.462 
+  509600    45000  8.0209197e-06      10296.133 
+  510400    45000  8.6299525e-06      10326.684 
+  511200    45000  9.1983102e-06       10355.88 
+  512000    45000  9.8265446e-06      10385.234 
+  512800    45000  1.0556817e-05      10413.802 
+  513600    45000    1.11654e-05       10442.33 
+  514400    45000  1.1837027e-05      10471.333 
+  515200    45000  1.2479178e-05      10500.766 
+  516000    45000  1.3139734e-05      10529.869 
+  516800    45000   1.387342e-05      10558.648 
+  517600    45000  1.4637117e-05      10588.052 
+  518400    45000  1.5414087e-05      10614.676 
+  519200    45000  1.6247314e-05      10638.917 
+  520000    45000  6.5910417e-06      10663.547 
+  520800    45000  6.8718069e-06      10687.405 
+  521600    45000  7.1914933e-06      10712.881 
+  522400    45000   7.487693e-06      10738.743 
+  523200    45000  1.5707399e-06      10763.585 
+  524000    45000  1.4272339e-06      10786.777 
+  524800    45000  1.3440726e-06      10809.458 
+  525600    45000  1.2870926e-06      10832.319 
+  526400    45000  1.2359551e-06      10855.331 
+  527200    45000  1.1491374e-06      10878.153 
+  528000    45000  1.0265155e-06      10901.061 
+  528800    45000  9.1456394e-07      10924.052 
+  529600    45000  9.2932175e-07       10947.69 
+  530400    45000  9.1525258e-07      10971.065 
+  531200    45000  9.7932328e-07      10994.279 
+  532000    45000  1.0566566e-06      11017.023 
+  532800    45000  1.0896306e-06      11039.829 
+  533600    45000  1.2049078e-06      11063.507 
+  534400    45000  8.2386349e-07      11087.015 
+  535200    45000  6.2010083e-07      11110.482 
+  536000    45000   5.066937e-07      11133.132 
+  536800    45000  5.4790494e-07      11157.009 
+  537600    45000  4.0181809e-07      11180.771 
+  538400    45000  4.1183726e-07      11204.494 
+  539200    45000   5.211014e-07      11227.652 
+  540000    45000  5.2938934e-07      11250.391 
+  540800    45000  6.9204306e-07       11272.64 
+  541600    45000  7.2902648e-07      11297.193 
+  542400    45000  6.6557854e-07      11324.697 
+  543200    45000  7.9738525e-07       11350.22 
+  544000    45000  7.6051265e-07      11374.664 
+  544800    45000  4.2459471e-07      11397.841 
+  545600    45000  4.6527041e-07      11420.624 
+  546400    45000  5.3741911e-07      11442.801 
+  547200    45000  5.5881789e-07      11464.581 
+  548000    45000  4.4465015e-07      11486.479 
+  548800    45000  2.7085432e-07      11508.223 
+  549600    45000  2.1620603e-07      11530.681 
+  550400    45000  2.3365738e-07      11553.883 
+  551200    45000  2.7706972e-07      11578.318 
+  552000    45000  1.2960268e-07      11601.302 
+  552800    45000  1.3198453e-07      11623.216 
+  553600    45000  1.4434291e-07      11645.084 
+  554400    45000  1.6626918e-07      11667.038 
+  555200    45000  2.1613485e-07      11688.822 
+  556000    45000  1.9027211e-07      11710.786 
+  556800    45000  1.5114773e-07      11732.481 
+  557600    45000   1.415535e-07      11754.304 
+  558400    45000  1.5244214e-07      11776.369 
+  559200    45000   1.377861e-07      11798.891 
+  560000    45000  9.2615574e-08      11822.099 
+  560800    45000  4.6712825e-08      11850.833 
+  561600    45000  3.6227855e-08      11879.837 
+  562400    45000  4.0347557e-08      11907.866 
+  563200    45000  6.4216834e-08      11935.873 
+  564000    45000  7.8788336e-08      11964.339 
+  564800    45000  9.8359916e-08      11991.071 
+  565600    45000  7.5494261e-08      12019.445 
+  566400    45000  1.9665445e-07       12044.01 
+  567200    45000  1.0710551e-07       12066.02 
+  568000    45000  1.2532888e-07      12087.967 
+  568800    45000  7.0572442e-08       12109.61 
+  569600    45000  7.4786699e-08      12131.374 
+  570400    45000  1.6949846e-07      12153.256 
+  571200    45000  1.3412616e-07      12175.004 
+  572000    45000  8.2761318e-08      12197.028 
+  572800    45000  8.6529863e-08      12218.674 
+  573600    45000  1.4861074e-07      12240.391 
+  574400    45000  2.3751498e-07      12262.312 
+  575200    45000  8.8662901e-08      12283.978 
+  576000    45000  1.1197744e-07      12305.927 
+  576800    45000  1.3313552e-07      12327.675 
+  577600    45000  1.0994644e-07      12349.405 
+  578400    45000  1.8947376e-07      12371.357 
+  579200    45000   9.023916e-08      12393.082 
+  580000    45000  1.0319003e-07      12414.951 
+  580800    45000  2.1494569e-07      12436.757 
+  581600    45000  1.2878856e-07      12458.476 
+  582400    45000  7.9984375e-08      12480.343 
+  583200    45000  9.3522383e-08      12502.131 
+  584000    45000  1.2406008e-07      12523.969 
+  584800    45000  1.4385296e-07      12545.668 
+  585600    45000  1.7956583e-07      12567.416 
+  586400    45000  1.4962441e-07        12589.3 
+  587200    45000   3.280139e-07      12611.019 
+  588000    45000   6.609969e-07      12633.056 
+  588800    45000  5.0718385e-07      12654.764 
+  589600    45000  4.4156666e-07      12676.571 
+  590400    45000  2.9364097e-07      12698.542 
+  591200    45000  3.5508314e-07      12720.233 
+  592000    45000  2.8084399e-07      12742.208 
+  592800    45000   2.894159e-07      12763.929 
+  593600    45000  2.3924092e-07      12785.687 
+  594400    45000  1.7372075e-07      12807.676 
+  595200    45000  1.6601723e-07      12829.375 
+  596000    45000  1.7671302e-07      12851.295 
+  596800    45000  1.4335842e-07      12873.026 
+  597600    45000  2.1097954e-07        12894.8 
+  598400    45000  1.7480775e-07      12916.626 
+  599200    45000  1.7087085e-07      12938.366 
+  600000    45000  1.3922611e-07      12960.213 
+  600800    45000  1.8481781e-07      12982.002 
+  601600    45000  1.9286969e-07      13003.759 
+  602400    45000  1.6619675e-07      13025.655 
+  603200    45000  2.7077107e-07      13047.388 
+  604000    45000  2.0356989e-07      13069.319 
+  604800    45000  4.0053714e-07      13091.013 
+  605600    45000  2.8710429e-07      13112.804 
+  606400    45000  4.1215377e-07      13134.787 
+  607200    45000  3.9477773e-07      13156.504 
+  608000    45000   2.965215e-07      13178.419 
+  608800    45000  3.2478151e-07      13200.153 
+  609600    45000  1.7502404e-07      13221.827 
+  610400    45000  1.4611707e-07      13243.735 
+  611200    45000  1.7551835e-07      13265.438 
+  612000    45000  2.7301427e-07       13287.27 
+  612800    45000  3.1655978e-07      13308.965 
+  613600    45000  2.2851759e-07        13330.6 
+  614400    45000  2.1475703e-07      13352.547 
+  615200    45000  1.9373946e-07      13374.246 
+  616000    45000  1.3774067e-07      13396.078 
+  616800    45000  1.8894174e-07       13417.82 
+  617600    45000  1.6309765e-07      13439.587 
+  618400    45000  2.3952511e-07      13461.424 
+  619200    45000  2.8068956e-07      13483.149 
+  620000    45000  2.3228826e-07      13505.059 
+  620800    45000  2.3269048e-07      13526.705 
+  621600    45000  2.0201237e-07      13548.414 
+  622400    45000  2.2743711e-07       13570.29 
+  623200    45000  2.1949609e-07      13591.997 
+  624000    45000  2.3256872e-07      13613.925 
+  624800    45000  2.5407896e-07      13635.641 
+  625600    45000  1.9912663e-07      13657.356 
+  626400    45000  1.8695613e-07      13679.246 
+  627200    45000  2.5845157e-07      13700.968 
+  628000    45000    3.26455e-07      13722.825 
+  628800    45000  3.1499254e-07      13744.551 
+  629600    45000  1.8495553e-07      13766.275 
+  630400    45000  2.1084841e-07       13788.17 
+  631200    45000  2.1757605e-07      13809.895 
+  632000    45000  2.6827275e-07       13831.83 
+  632800    45000  2.3069879e-07      13853.612 
+  633600    45000  3.1901794e-07       13875.37 
+  634400    45000  3.2927828e-07      13897.211 
+  635200    45000  3.3926184e-07      13918.979 
+  636000    45000  2.8962289e-07      13940.938 
+  636800    45000  2.5218207e-07      13962.639 
+  637600    45000  2.2307971e-07      13984.366 
+  638400    45000  1.5415384e-07      14006.276 
+  639200    45000  1.3077084e-07      14027.931 
+  640000    45000  1.3537669e-07      14049.901 
+Loop time of 14049.9 on 1 procs for 480000 steps with 45000 atoms, finish time Sat Feb  8 04:50:48 2020
+
+
+Pair  time (%) = 10464.2 (74.4789)
+Neigh time (%) = 215.624 (1.5347)
+Comm  time (%) = 4.76704 (0.0339293)
+Outpt time (%) = 48.6139 (0.346009)
+Other time (%) = 3316.68 (23.6064)
+
+Nlocal:    45000 ave 45000 max 45000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    284651 ave 284651 max 284651 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 284651
+Ave neighs/atom = 6.32558
+Neighbor list builds = 4190
+Dangerous builds = 0
+
