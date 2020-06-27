@@ -1,0 +1,179 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2017-12-08-22:31:09 by hwb, git commit unknown)
+#Multisphere
+
+atom_style	sphere
+atom_modify	map array sort 0 0
+boundary	f f f #m m m
+newton		off
+
+communicate	single vel yes
+
+#PUBLIC version only supports serial execution
+processors	1 1 1
+
+units		si
+
+region		reg block -0.3 0.3 -0.3 0.3 0. 0.5 units box
+create_box	1 reg
+Created orthogonal box = (-0.3 -0.3 0) to (0.3 0.3 0.5)
+  1 by 1 by 1 MPI processor grid
+
+neighbor	0.004 bin
+neigh_modify	delay 0
+
+#Material properties required for new pair styles
+
+fix 		m1 all property/global youngsModulus peratomtype 1.e7
+fix 		m2 all property/global poissonsRatio peratomtype 0.45
+fix 		m3 all property/global coefficientRestitution peratomtypepair 1 0.3
+fix 		m4 all property/global coefficientFriction peratomtypepair 1 0.5
+fix 		m5 all property/global characteristicVelocity scalar 2.
+
+#New pair style
+pair_style gran model hertz tangential history #Hertzian without cohesion
+pair_coeff	* *
+
+timestep	0.00001
+
+fix		gravi all gravity 9.81 vector 0.0 0.0 -1.0
+###如若不定义，则直接飞出去
+fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane 0.0
+
+#distributions for insertion
+fix		pts1 all particletemplate/multisphere 15485863 atom_type 1 density constant 2500 nspheres 6 ntry 100000 spheres file data/stone1.test scale 1 type 1
+Finished calculating properties of template
+   mass = 5.656875e-03, radius of bounding sphere = 1.250000e-02, radius of equivalent sphere = 8.144217e-03
+   center of mass = 0.000000e+00, 0.000000e+00, 0.000000e+00
+   center of bounding sphere in body coords = -7.137801e-04, 1.250266e-05, -1.098478e-06
+   Principal moments of inertia_: 1.250577e-07, 2.159051e-07, 2.767005e-07
+     Eigenvector: 9.999933e-01, 3.080091e-03, 1.984302e-03
+     Eigenvector: -3.078170e-03, 9.999948e-01, -9.701520e-04
+     Eigenvector: -1.987279e-03, 9.640375e-04, 9.999976e-01
+     Inertia tensor: 1.250591e-07, -2.799329e-10, -3.010847e-10
+     Inertia tensor: -2.799329e-10, 2.159043e-07, 5.805366e-11
+     Inertia tensor: -3.010847e-10, 5.805366e-11, 2.766999e-07
+#0. 0. 0. 0.005 0.005 0. 0. 0.005 0.01 0. 0. 0.005 scale 1 type1
+
+fix		pdd1 all particledistribution/discrete 15485867 1 pts1 1.0
+
+#region and insertion
+region		bc cylinder z 0.0 0.0 0.25 0.39 0.4 units box
+
+fix		ins all insert/pack seed 32452843 distributiontemplate pdd1 vel constant 0. 0. -1. 		insert_every once overlapcheck yes region bc ntry_mc 100000 volumefraction_region 0.9
+#fix    	ins nve_group insert/stream seed 32452867 distributiontemplate pdd1 nparticles 2000 massrate 0.01 insert_every 2000 overlapcheck yes all_in no vel constant 0.0 0.0 -2.5 insertion_face inface
+
+
+#integrator for multisphere rigid bodies
+fix		integr all multisphere
+
+#output settings, include total thermal energy
+compute		1 all erotate/sphere
+fix		ts all check/timestep/gran 1000 0.1 0.1
+thermo_style	custom step atoms ke c_1 f_ts[1] f_ts[2] vol
+thermo		1000
+thermo_modify	lost ignore norm no
+
+run 1
+Setting up run at Fri Feb 14 04:53:27 2020
+
+WARNING: Energy calculated for multisphere particles is currently not correct (../fix_multisphere.cpp:1312)
+INFO: Particle insertion ins: inserting every 0 steps
+Memory usage per processor = 7.19902 Mbytes
+    Step    Atoms         KinEng              1          ts[1]          ts[2]         Volume 
+       0        0              0              0              0              0           0.18 
+INFO: Particle insertion ins: inserted 371 particle templates (mass 2.098701e+00) at step 1
+ - a total of 371 particle templates (mass 2.098701e+00) inserted so far.
+WARNING: Particle insertion: Less insertions than requested (../fix_insert.cpp:814)
+       1     2226      1.0494533              0              0              0           0.18 
+Loop time of 0.019635 on 1 procs for 1 steps with 2226 atoms, finish time Fri Feb 14 04:53:27 2020
+
+
+Pair  time (%) = 6.29425e-05 (0.320563)
+Neigh time (%) = 0.00185084 (9.42626)
+Comm  time (%) = 1.50204e-05 (0.0764981)
+Outpt time (%) = 4.19617e-05 (0.213709)
+Other time (%) = 0.0176642 (89.963)
+
+Nlocal:    2226 ave 2226 max 2226 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1136 ave 1136 max 1136 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1136
+Ave neighs/atom = 0.510332
+Neighbor list builds = 1
+Dangerous builds = 0
+
+#insert the first particles so that dump is not empty
+dump		dmp all custom/vtk 200 post/multi_*.vtk id type mol x y z vx vy vz fx fy fz omegax omegay omegaz radius
+
+#insert particles
+run		40000 upto
+Setting up run at Fri Feb 14 04:53:27 2020
+
+WARNING: Energy calculated for multisphere particles is currently not correct (../fix_multisphere.cpp:1312)
+Memory usage per processor = 10.9201 Mbytes
+    Step    Atoms         KinEng              1          ts[1]          ts[2]         Volume 
+       1     2226      1.0494533              0              0              0           0.18 
+    1000     2226      1.2652183              0    0.022461173   0.0091655151           0.18 
+    2000     2226      1.5013864              0    0.022461173   0.0093237276           0.18 
+    3000     2226      1.7577515              0    0.022461173   0.0094718776           0.18 
+    4000     2226      2.0343137              0    0.022461173   0.0096112997           0.18 
+    5000     2226       2.331073              0    0.022461173   0.0097430721           0.18 
+    6000     2226      2.6480293              0    0.022461173   0.0098680787           0.18 
+    7000     2226      2.9851828              0    0.022461173   0.0099870545           0.18 
+    8000     2226      3.3425333              0    0.022461173    0.010100617           0.18 
+    9000     2226      3.7200809              0    0.022461173    0.010209291           0.18 
+   10000     2226      4.1178255              0    0.022461173    0.010313525           0.18 
+   11000     2226      4.5357673              0    0.022461173    0.010413708           0.18 
+   12000     2226      4.9739061              0    0.022461173    0.010510178           0.18 
+   13000     2226      5.4322419              0    0.022461173    0.010603231           0.18 
+   14000     2226      5.9107749              0    0.022461173    0.010693128           0.18 
+   15000     2226       6.409505              0    0.022461173      0.0107801           0.18 
+   16000     2226      6.9284321              0    0.022461173    0.010864352           0.18 
+   17000     2226      7.4675563              0    0.022461173    0.010946069           0.18 
+   18000     2226      8.0268775              0    0.022461173    0.011025416           0.18 
+   19000     2226      8.6063959              0    0.022461173    0.011102543           0.18 
+   20000     2226     0.12374935              0    0.022461173    0.010791417           0.18 
+   21000     2226     0.06154552              0    0.022461173    0.010240558           0.18 
+   22000     2226     0.04733472              0    0.022461173     0.01022716           0.18 
+   23000     2226    0.038700955              0    0.022461173   0.0099970231           0.18 
+   24000     2226    0.032917443              0    0.022461173   0.0099324023           0.18 
+   25000     2226    0.029666076              0    0.022461173   0.0099949463           0.18 
+   26000     2226    0.027769849              0    0.022461173    0.010302267           0.18 
+   27000     2226    0.025938634              0    0.022461173    0.010080512           0.18 
+   28000     2226    0.026079814              0    0.022461173   0.0097823547           0.18 
+   29000     2226    0.026048604              0    0.022461173    0.010134451           0.18 
+   30000     2226    0.025041268              0    0.022461173   0.0099698107           0.18 
+   31000     2226    0.026205964              0    0.022461173   0.0098603382           0.18 
+   32000     2226    0.027943812              0    0.022461173    0.010214864           0.18 
+   33000     2226    0.024097947              0    0.022461173   0.0097348207           0.18 
+   34000     2226    0.023704919              0    0.022461173   0.0096763542           0.18 
+   35000     2226    0.023529813              0    0.022461173   0.0097368437           0.18 
+   36000     2220    0.017815959              0    0.022461173   0.0097305346           0.18 
+   37000     2214    0.015987917              0    0.022461173   0.0097659112           0.18 
+   38000     2214    0.013107903              0    0.022461173   0.0093098099           0.18 
+   39000     2214    0.012840143              0    0.022461173   0.0093636473           0.18 
+   40000     2214    0.007857773              0    0.022461173   0.0091593588           0.18 
+Loop time of 13.5421 on 1 procs for 39999 steps with 2214 atoms, finish time Fri Feb 14 04:53:41 2020
+
+
+Pair  time (%) = 1.55138 (11.456)
+Neigh time (%) = 0.507862 (3.75025)
+Comm  time (%) = 0.00709271 (0.0523754)
+Outpt time (%) = 1.80194 (13.3063)
+Other time (%) = 9.67379 (71.4351)
+
+Nlocal:    2214 ave 2214 max 2214 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1398 ave 1398 max 1398 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1398
+Ave neighs/atom = 0.631436
+Neighbor list builds = 361
+Dangerous builds = 0
